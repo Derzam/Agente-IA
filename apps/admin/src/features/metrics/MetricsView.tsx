@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { Card, CardHeader, CardBody } from '@/components/common/Card';
 import { metricsService } from '@/services/metricsService';
-import { HourlySalesData } from '@agente-ia/shared';
+import { HourlySalesData } from '@/types/viewModels';
 
 export const MetricsView: React.FC = () => {
   const [hourlySales, setHourlySales] = useState<HourlySalesData[]>([]);
