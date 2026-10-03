@@ -1,7 +1,7 @@
 # Especificación Detallada de Pantallas — Panel Administrativo
 
-> **Versión:** 1.0.0 — Fase 1  
-> **Área:** UX/UI & Frontend Architecture  
+> **Versión:** 1.0.0 — Fase 1
+> **Área:** UX/UI & Frontend Architecture
 > **Proyecto:** Agente de IA para WhatsApp de Restaurante
 
 ---
