@@ -56,12 +56,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     }
   };
 
-  const handleQuickAdvance = async (orderId: string, currentStatus: Order['status']) => {
-    let nextStatus: Order['status'] = 'preparing';
-    if (currentStatus === 'confirmed') nextStatus = 'preparing';
-    else if (currentStatus === 'preparing') nextStatus = 'out_for_delivery';
+  const handleQuickAdvance = async (
+    orderId: string,
+    currentStatus: Order['status'],
+    fulfillmentType?: Order['fulfillmentType']
+  ) => {
+    let nextStatus: Order['status'] | null = null;
+    if (currentStatus === 'confirmed') nextStatus = 'accepted';
+    else if (currentStatus === 'accepted') nextStatus = 'preparing';
+    else if (currentStatus === 'preparing') nextStatus = 'ready';
+    else if (currentStatus === 'ready') nextStatus = fulfillmentType === 'delivery' ? 'out_for_delivery' : 'delivered';
     else if (currentStatus === 'out_for_delivery') nextStatus = 'delivered';
 
+    if (!nextStatus) return;
     await orderService.updateOrderStatus(orderId, nextStatus);
     loadData();
   };
@@ -266,7 +273,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         <Button
                           variant="primary"
                           size="sm"
-                          onClick={() => handleQuickAdvance(order.id, order.status)}
+                          onClick={() => handleQuickAdvance(order.id, order.status, order.fulfillmentType)}
                           leftIcon={<Flame className="w-3.5 h-3.5" />}
                         >
                           Pasar a Cocina
@@ -276,7 +283,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={() => handleQuickAdvance(order.id, order.status)}
+                          onClick={() => handleQuickAdvance(order.id, order.status, order.fulfillmentType)}
                           leftIcon={<Bike className="w-3.5 h-3.5" />}
                         >
                           Listo Despacho
@@ -286,7 +293,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         <Button
                           variant="success"
                           size="sm"
-                          onClick={() => handleQuickAdvance(order.id, order.status)}
+                          onClick={() => handleQuickAdvance(order.id, order.status, order.fulfillmentType)}
                         >
                           Marcar Entregado
                         </Button>
@@ -295,7 +302,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         <Button
                           variant="success"
                           size="sm"
-                          onClick={() => handleQuickAdvance(order.id, order.status)}
+                          onClick={() => handleQuickAdvance(order.id, order.status, order.fulfillmentType)}
                         >
                           Marcar Retirado
                         </Button>
