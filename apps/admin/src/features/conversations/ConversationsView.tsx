@@ -86,7 +86,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
 
     // If staff sends a public message, auto-takeover if it was waiting
     const currentConv = conversations.find((c) => c.id === selectedConvId);
-    if (currentConv?.status === 'waiting_human' && !isInternalNote) {
+    if (currentConv?.status === 'human_pending' && !isInternalNote) {
       await handleTakeover();
     }
   };
@@ -117,7 +117,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
       c.lastMessageSnippet.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
 
-    if (filterTab === 'waiting') return c.status === 'waiting_human';
+    if (filterTab === 'waiting') return c.status === 'human_pending';
     if (filterTab === 'human') return c.status === 'human_active';
     if (filterTab === 'bot') return c.status === 'bot_active';
     return true;
@@ -154,7 +154,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
               }`}
             >
               <span>Espera</span>
-              {conversations.filter((c) => c.status === 'waiting_human').length > 0 && (
+              {conversations.filter((c) => c.status === 'human_pending').length > 0 && (
                 <span className="w-2 h-2 rounded-full bg-rose-300 animate-ping" />
               )}
             </button>
@@ -192,7 +192,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
           ) : (
             filteredConversations.map((conv) => {
               const isSelected = conv.id === selectedConvId;
-              const isWaiting = conv.status === 'waiting_human';
+              const isWaiting = conv.status === 'human_pending';
               return (
                 <div
                   key={conv.id}
@@ -262,7 +262,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
 
             {/* Takeover & Bot Controls */}
             <div className="flex items-center gap-2">
-              {currentConv.status === 'waiting_human' && (
+              {currentConv.status === 'human_pending' && (
                 <Button
                   variant="danger"
                   size="sm"
