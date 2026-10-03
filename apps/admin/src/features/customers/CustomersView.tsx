@@ -10,7 +10,7 @@ import { Button } from '@/components/common/Button';
 import { Drawer } from '@/components/common/Drawer';
 import { EmptyState } from '@/components/common/EmptyState';
 import { customerService } from '@/services/customerService';
-import { Customer } from '@agente-ia/shared';
+import { Customer } from '@/types/viewModels';
 
 interface CustomersViewProps {
   onNavigateToChat?: (customerPhone: string) => void;
