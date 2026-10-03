@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   Kanban,
   Table as TableIcon,
@@ -17,8 +17,16 @@ import { OrderStatusBadge, FulfillmentBadge } from '@/components/common/StatusBa
 import { Drawer } from '@/components/common/Drawer';
 import { Modal } from '@/components/common/Modal';
 import { EmptyState } from '@/components/common/EmptyState';
+import { VersionConflictNotice } from '@/components/common/VersionConflictNotice';
+import { ApiErrorBanner } from '@/components/common/ApiErrorBanner';
 import { orderService } from '@/services/orderService';
 import { Order, OrderStatus } from '@/types/viewModels';
+import type { OrderAction } from '@agente-ia/shared';
+import { getAvailableOrderActions } from '@/adapters/orderAdapter';
+import { useBusiness } from '@/auth/BusinessContext';
+import { usePolling } from '@/hooks/usePolling';
+import { newIdempotencyKey } from '@/services/apiClient';
+import { VersionConflictError, NetworkError } from '@/api/types';
 import { NavItemKey } from '@/components/layout/Sidebar';
 
 interface OrdersViewProps {
@@ -31,6 +39,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
   initialOrderId,
   onNavigateToChat,
 }) => {
+  const { activeRole } = useBusiness();
   const [orders, setOrders] = useState<Order[]>([]);
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
   const [searchQuery, setSearchQuery] = useState('');
@@ -40,10 +49,38 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
   const [cancelReason, setCancelReason] = useState('');
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [conflictError, setConflictError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<Error | null>(null);
+
+  // Store idempotency keys by operation so network retries reuse the identical key
+  const retainedKeysRef = useRef<Map<string, string>>(new Map());
+
+  const loadOrders = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const data = await orderService.getOrders(undefined, { signal });
+      setOrders(data);
+      setActionError(null);
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        setActionError(err);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
+    setIsLoading(true);
     loadOrders();
-  }, []);
+  }, [loadOrders]);
+
+  // Polling: every 8s while view is visible, paused on blur / 429
+  usePolling({
+    callback: async (signal) => {
+      await loadOrders(signal);
+    },
+    intervalMs: 8000,
+  });
 
   useEffect(() => {
     if (initialOrderId && orders.length > 0) {
@@ -52,29 +89,46 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
     }
   }, [initialOrderId, orders]);
 
-  const loadOrders = async () => {
-    setIsLoading(true);
-    try {
-      const data = await orderService.getOrders();
-      setOrders(data);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const handleTransition = async (order: Order, action: OrderAction, reason?: string) => {
+    setConflictError(null);
+    setActionError(null);
 
-  const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
-    const updated = await orderService.updateOrderStatus(orderId, newStatus);
-    setOrders((prev) => prev.map((o) => (o.id === orderId ? updated : o)));
-    if (selectedOrder?.id === orderId) {
-      setSelectedOrder(updated);
+    const gestureKey = `${order.id}-${action}`;
+    const keyToUse = retainedKeysRef.current.get(gestureKey) || newIdempotencyKey();
+
+    try {
+      const updated = await orderService.transitionOrder(
+        order.id,
+        action,
+        order.version || 1,
+        reason || null,
+        keyToUse
+      );
+      // Clean up key on success
+      retainedKeysRef.current.delete(gestureKey);
+
+      setOrders((prev) => prev.map((o) => (o.id === order.id ? updated : o)));
+      if (selectedOrder?.id === order.id) {
+        setSelectedOrder(updated);
+      }
+    } catch (err: any) {
+      if (err instanceof VersionConflictError) {
+        setConflictError(err.message);
+        // On 409 conflict, never retry automatically: refresh resource
+        await loadOrders();
+      } else if (err instanceof NetworkError) {
+        // Retain the key for retry of the SAME gesture
+        retainedKeysRef.current.set(gestureKey, keyToUse);
+        setActionError(err);
+      } else {
+        setActionError(err);
+      }
     }
   };
 
   const handleCancelOrder = async () => {
     if (!selectedOrder || !cancelReason.trim()) return;
-    const updated = await orderService.cancelOrder(selectedOrder.id, cancelReason);
-    setOrders((prev) => prev.map((o) => (o.id === selectedOrder.id ? updated : o)));
-    setSelectedOrder(updated);
+    await handleTransition(selectedOrder, 'cancel', cancelReason);
     setIsCancelModalOpen(false);
     setCancelReason('');
   };
@@ -98,15 +152,57 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
   });
 
   const columns: { id: OrderStatus[]; title: string; subtitle: string; color: string }[] = [
-    { id: ['confirmed', 'accepted'], title: 'Nuevos Pedidos', subtitle: 'Confirmados por WhatsApp', color: 'border-amber-400 bg-amber-50/20' },
-    { id: ['preparing'], title: 'En Preparación', subtitle: 'En plancha o freidora', color: 'border-blue-400 bg-blue-50/20' },
-    { id: ['out_for_delivery', 'ready'], title: 'Despacho & Retiro', subtitle: 'En ruta o en mostrador', color: 'border-indigo-400 bg-indigo-50/20' },
-    { id: ['delivered'], title: 'Entregados', subtitle: 'Servicio completado hoy', color: 'border-emerald-400 bg-emerald-50/10' },
+    {
+      id: ['confirmed', 'accepted'],
+      title: 'Nuevos & Confirmados',
+      subtitle: 'Por aceptar y enviar a cocina',
+      color: 'border-blue-500 bg-blue-50/30',
+    },
+    {
+      id: ['preparing'],
+      title: 'En Cocina',
+      subtitle: 'En proceso de preparación',
+      color: 'border-amber-500 bg-amber-50/30',
+    },
+    {
+      id: ['ready', 'out_for_delivery'],
+      title: 'Listos & En Reparto',
+      subtitle: 'Esperando retiro o repartidor',
+      color: 'border-purple-500 bg-purple-50/30',
+    },
+    {
+      id: ['delivered'],
+      title: 'Entregados Hoy',
+      subtitle: 'Completados con éxito',
+      color: 'border-emerald-500 bg-emerald-50/30',
+    },
   ];
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 max-w-7xl mx-auto">
-      {/* Top Filter & View Toggle Bar */}
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+      {/* 409 VERSION_CONFLICT NOTICE */}
+      {conflictError && (
+        <VersionConflictNotice
+          message={conflictError}
+          onRefresh={() => {
+            setConflictError(null);
+            loadOrders();
+          }}
+        />
+      )}
+
+      {/* API ERROR / NETWORK ERROR BANNER */}
+      {actionError ? (
+        <ApiErrorBanner
+          error={actionError}
+          onRetry={() => {
+            setActionError(null);
+            loadOrders();
+          }}
+        />
+      ) : null}
+
+      {/* FILTER BAR & VIEW TOGGLE */}
       <FilterBar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -165,144 +261,174 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                 setSelectedStatusFilter('all');
               }}
             >
-              Restablecer filtros
+              Limpiar Filtros
             </Button>
           }
         />
       ) : viewMode === 'kanban' ? (
         /* KANBAN BOARD */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
           {columns.map((col) => {
             const colOrders = filteredOrders.filter((o) => col.id.includes(o.status));
             return (
-              <div key={col.title} className="flex flex-col rounded-2xl bg-slate-100/70 border border-slate-200 p-3 min-h-[500px]">
+              <div
+                key={col.title}
+                className="bg-slate-100/80 rounded-2xl p-3 border border-slate-200/80 flex flex-col max-h-[calc(100vh-14rem)]"
+              >
                 {/* Column Header */}
-                <div className="p-2 mb-2 flex items-center justify-between">
+                <div className="flex items-center justify-between pb-3 px-1 border-b border-slate-200">
                   <div>
-                    <h3 className="font-bold text-slate-800 text-sm">{col.title}</h3>
-                    <p className="text-[11px] text-slate-500">{col.subtitle}</p>
+                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                      {col.title}
+                      <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-white text-slate-600 border border-slate-200 shadow-2xs">
+                        {colOrders.length}
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-slate-500 mt-0.5">{col.subtitle}</p>
                   </div>
-                  <span className="w-6 h-6 rounded-full bg-white border border-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center shadow-2xs">
-                    {colOrders.length}
-                  </span>
                 </div>
 
-                {/* Column Cards */}
-                <div className="space-y-3 flex-1">
-                  {colOrders.map((order) => (
-                    <div
-                      key={order.id}
-                      onClick={() => setSelectedOrder(order)}
-                      className="bg-white rounded-xl p-3.5 border border-slate-200 shadow-2xs hover:shadow-md transition-all cursor-pointer space-y-2.5 group"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-900 text-sm">{order.orderNumber}</span>
-                        <FulfillmentBadge type={order.fulfillmentType} size="sm" />
-                      </div>
+                {/* Column Cards Container */}
+                <div className="space-y-3 overflow-y-auto mt-3 pr-1 flex-1">
+                  {colOrders.map((order) => {
+                    const actions = getAvailableOrderActions(order.status, order.fulfillmentType, activeRole || 'operator');
 
-                      <div className="text-xs space-y-1">
-                        <p className="font-semibold text-slate-800">{order.customerName}</p>
-                        <p className="text-slate-500 flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-slate-400" />
-                          <span>hace {Math.max(1, Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000))} min</span>
-                        </p>
-                      </div>
-
-                      {/* Items Preview */}
-                      <div className="bg-slate-50 p-2 rounded-lg text-xs text-slate-700 space-y-0.5">
-                        {order.items.slice(0, 2).map((item) => (
-                          <p key={item.id} className="truncate">
-                            <span className="font-semibold">{item.quantity}x</span> {item.name}
-                          </p>
-                        ))}
-                        {order.items.length > 2 && (
-                          <p className="text-[10px] text-slate-400 font-medium">
-                            +{order.items.length - 2} productos más...
-                          </p>
-                        )}
-                      </div>
-
-                      {order.kitchenNotes && (
-                        <p className="text-[11px] text-amber-900 bg-amber-50 p-1.5 rounded border border-amber-200 font-medium">
-                          ⚠️ {order.kitchenNotes}
-                        </p>
-                      )}
-
-                      {/* Card Footer: Price and Quick Transition Button */}
-                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                        <span className="font-bold text-slate-900 text-sm">${order.total.toFixed(2)}</span>
-
-                        {order.status === 'confirmed' && (
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStatusChange(order.id, 'accepted');
-                            }}
-                          >
-                            Aceptar
-                          </Button>
-                        )}
-                        {order.status === 'accepted' && (
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStatusChange(order.id, 'preparing');
-                            }}
-                          >
-                            A Cocina
-                          </Button>
-                        )}
-                        {order.status === 'preparing' && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStatusChange(order.id, 'ready');
-                            }}
-                          >
-                            Listo
-                          </Button>
-                        )}
-                        {order.status === 'ready' && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStatusChange(
-                                order.id,
-                                order.fulfillmentType === 'delivery' ? 'out_for_delivery' : 'delivered'
-                              );
-                            }}
-                          >
-                            {order.fulfillmentType === 'delivery' ? 'Despachar' : 'Entregar'}
-                          </Button>
-                        )}
-                        {order.status === 'out_for_delivery' && (
-                          <Button
-                            variant="success"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStatusChange(order.id, 'delivered');
-                            }}
-                          >
-                            Entregar
-                          </Button>
-                        )}
-                        {order.status === 'delivered' && (
-                          <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
-                            ✓ Cerrado
+                    return (
+                      <div
+                        key={order.id}
+                        onClick={() => setSelectedOrder(order)}
+                        className="bg-white rounded-xl p-3.5 shadow-2xs border border-slate-200 hover:border-orange-300 hover:shadow-md transition-all cursor-pointer space-y-2.5 relative group"
+                      >
+                        {/* Card Top: OrderNumber & Type */}
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-900 text-xs tracking-wide">
+                            {order.orderNumber}
                           </span>
+                          <div className="flex items-center gap-1.5">
+                            <FulfillmentBadge type={order.fulfillmentType} size="sm" />
+                            <OrderStatusBadge status={order.status} size="sm" />
+                          </div>
+                        </div>
+
+                        {/* Customer Info */}
+                        <div>
+                          <p className="font-semibold text-slate-800 text-xs truncate">
+                            {order.customerName}
+                          </p>
+                          <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
+                            <span className="flex items-center gap-1">
+                              <Phone className="w-3 h-3 text-slate-400" />
+                              {order.customerPhone}
+                            </span>
+                            <span>•</span>
+                            <span className="flex items-center gap-1 text-slate-400">
+                              <Clock className="w-3 h-3" />
+                              {order.createdAt.slice(11, 16)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Order Items Preview */}
+                        <div className="bg-slate-50 rounded-lg p-2 text-xs space-y-1 text-slate-700">
+                          {order.items.slice(0, 2).map((it) => (
+                            <div key={it.id} className="flex justify-between items-center text-[11px]">
+                              <span className="truncate max-w-[170px]">
+                                {it.quantity}x {it.name}
+                              </span>
+                              <span className="text-slate-400 font-medium">${it.subtotal.toFixed(2)}</span>
+                            </div>
+                          ))}
+                          {order.items.length > 2 && (
+                            <p className="text-[10px] text-slate-400 font-medium pt-0.5">
+                              +{order.items.length - 2} productos más...
+                            </p>
+                          )}
+                        </div>
+
+                        {order.kitchenNotes && (
+                          <p className="text-[11px] text-amber-900 bg-amber-50 p-1.5 rounded border border-amber-200 font-medium">
+                            ⚠️ {order.kitchenNotes}
+                          </p>
                         )}
+
+                        {/* Card Footer: Price and Quick Transition Button */}
+                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                          <span className="font-bold text-slate-900 text-sm">${order.total.toFixed(2)}</span>
+
+                          {actions.canAccept && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleTransition(order, 'accept');
+                              }}
+                            >
+                              Aceptar
+                            </Button>
+                          )}
+                          {actions.canStartPreparation && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleTransition(order, 'start_preparation');
+                              }}
+                            >
+                              A Cocina
+                            </Button>
+                          )}
+                          {actions.canMarkReady && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleTransition(order, 'mark_ready');
+                              }}
+                            >
+                              Listo
+                            </Button>
+                          )}
+                          {actions.canDispatch && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleTransition(order, 'dispatch');
+                              }}
+                            >
+                              Despachar
+                            </Button>
+                          )}
+                          {actions.canComplete && (
+                            <Button
+                              variant="success"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleTransition(order, 'complete');
+                              }}
+                            >
+                              Entregar
+                            </Button>
+                          )}
+                          {order.status === 'delivered' && (
+                            <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
+                              ✓ Cerrado
+                            </span>
+                          )}
+                        </div>
                       </div>
+                    );
+                  })}
+                  {colOrders.length === 0 && (
+                    <div className="text-center py-10 text-xs text-slate-400 font-medium">
+                      Sin pedidos aquí
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             );
@@ -310,43 +436,41 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         </div>
       ) : (
         /* TABLE VIEW */
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-700">
-              <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase border-b border-slate-200">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-semibold">
                 <tr>
-                  <th className="p-4">Pedido</th>
-                  <th className="p-4">Cliente</th>
-                  <th className="p-4">Productos</th>
-                  <th className="p-4">Modalidad</th>
-                  <th className="p-4">Estado</th>
-                  <th className="p-4">Total</th>
-                  <th className="p-4 text-right">Acción</th>
+                  <th className="py-3 px-4"># Pedido</th>
+                  <th className="py-3 px-4">Cliente</th>
+                  <th className="py-3 px-4">Tipo</th>
+                  <th className="py-3 px-4">Items</th>
+                  <th className="py-3 px-4">Total</th>
+                  <th className="py-3 px-4">Estado</th>
+                  <th className="py-3 px-4">Hora</th>
+                  <th className="py-3 px-4 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredOrders.map((order) => (
-                  <tr
-                    key={order.id}
-                    onClick={() => setSelectedOrder(order)}
-                    className="hover:bg-slate-50/80 cursor-pointer transition-colors"
-                  >
-                    <td className="p-4 font-bold text-slate-900">{order.orderNumber}</td>
-                    <td className="p-4">
+                  <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3 px-4 font-bold text-slate-900">{order.orderNumber}</td>
+                    <td className="py-3 px-4">
                       <p className="font-semibold text-slate-800">{order.customerName}</p>
-                      <p className="text-xs text-slate-400">{order.customerPhone}</p>
+                      <p className="text-[11px] text-slate-500">{order.customerPhone}</p>
                     </td>
-                    <td className="p-4 max-w-xs truncate text-xs text-slate-600">
-                      {order.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}
-                    </td>
-                    <td className="p-4">
+                    <td className="py-3 px-4">
                       <FulfillmentBadge type={order.fulfillmentType} size="sm" />
                     </td>
-                    <td className="p-4">
+                    <td className="py-3 px-4 text-slate-600 max-w-[200px] truncate">
+                      {order.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}
+                    </td>
+                    <td className="py-3 px-4 font-bold text-slate-900">${order.total.toFixed(2)}</td>
+                    <td className="py-3 px-4">
                       <OrderStatusBadge status={order.status} size="sm" />
                     </td>
-                    <td className="p-4 font-bold text-slate-900">${order.total.toFixed(2)}</td>
-                    <td className="p-4 text-right" onClick={(e) => e.stopPropagation()}>
+                    <td className="py-3 px-4 text-slate-500">{order.createdAt.slice(11, 16)}</td>
+                    <td className="py-3 px-4 text-right">
                       <Button variant="ghost" size="sm" onClick={() => setSelectedOrder(order)}>
                         Detalles
                       </Button>
@@ -384,7 +508,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                 >
                   Imprimir Ticket
                 </Button>
-                {selectedOrder.status !== 'cancelled' && selectedOrder.status !== 'delivered' && (
+                {getAvailableOrderActions(selectedOrder.status, selectedOrder.fulfillmentType, activeRole || 'operator').canCancel && (
                   <Button
                     variant="danger"
                     size="sm"
@@ -396,62 +520,64 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                 )}
               </div>
 
-              {/* Status advancement in drawer */}
-              {selectedOrder.status === 'confirmed' && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  className="w-full sm:w-auto"
-                  onClick={() => handleStatusChange(selectedOrder.id, 'accepted')}
-                >
-                  Aceptar pedido
-                </Button>
-              )}
-              {selectedOrder.status === 'accepted' && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  className="w-full sm:w-auto"
-                  onClick={() => handleStatusChange(selectedOrder.id, 'preparing')}
-                >
-                  Pasar a Cocina 👨‍🍳
-                </Button>
-              )}
-              {selectedOrder.status === 'preparing' && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="w-full sm:w-auto"
-                  onClick={() => handleStatusChange(selectedOrder.id, 'ready')}
-                >
-                  Marcar listo
-                </Button>
-              )}
-              {selectedOrder.status === 'ready' && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="w-full sm:w-auto"
-                  onClick={() =>
-                    handleStatusChange(
-                      selectedOrder.id,
-                      selectedOrder.fulfillmentType === 'delivery' ? 'out_for_delivery' : 'delivered'
-                    )
-                  }
-                >
-                  {selectedOrder.fulfillmentType === 'delivery' ? 'Despachar 🛵' : 'Entregar ✓'}
-                </Button>
-              )}
-              {selectedOrder.status === 'out_for_delivery' && (
-                <Button
-                  variant="success"
-                  size="sm"
-                  className="w-full sm:w-auto"
-                  onClick={() => handleStatusChange(selectedOrder.id, 'delivered')}
-                >
-                  Marcar Entregado ✓
-                </Button>
-              )}
+              {/* Status advancement in drawer via canonical transitions */}
+              {(() => {
+                const actions = getAvailableOrderActions(
+                  selectedOrder.status,
+                  selectedOrder.fulfillmentType,
+                  activeRole || 'operator'
+                );
+
+                return (
+                  <div className="flex gap-2">
+                    {actions.canAccept && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => handleTransition(selectedOrder, 'accept')}
+                      >
+                        Aceptar pedido
+                      </Button>
+                    )}
+                    {actions.canStartPreparation && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => handleTransition(selectedOrder, 'start_preparation')}
+                      >
+                        Pasar a Cocina 👨‍🍳
+                      </Button>
+                    )}
+                    {actions.canMarkReady && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleTransition(selectedOrder, 'mark_ready')}
+                      >
+                        Marcar listo
+                      </Button>
+                    )}
+                    {actions.canDispatch && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleTransition(selectedOrder, 'dispatch')}
+                      >
+                        Despachar 🛵
+                      </Button>
+                    )}
+                    {actions.canComplete && (
+                      <Button
+                        variant="success"
+                        size="sm"
+                        onClick={() => handleTransition(selectedOrder, 'complete')}
+                      >
+                        Completar Entrega ✓
+                      </Button>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )
         }

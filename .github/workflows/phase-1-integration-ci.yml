@@ -1,4 +1,4 @@
-name: Architecture and Backend CI
+name: Phase 2 Integration CI
 
 on:
   pull_request:
@@ -8,17 +8,19 @@ on:
     branches:
       - integration/phase-01-contracts
       - codex/phase-02-backend-foundation
+      - antigravity/phase-02-api-adapters
+      - integration/phase-02
 
 permissions:
   contents: read
 
 concurrency:
-  group: phase-1-integration-${{ github.workflow }}-${{ github.ref }}
+  group: phase-2-validation-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   validate:
-    name: Validate backend, architecture and admin
+    name: Validate backend, admin and architecture
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -52,6 +54,9 @@ jobs:
 
       - name: Typecheck workspaces
         run: npm run typecheck
+
+      - name: Test admin
+        run: npm run admin:test
 
       - name: Build admin
         run: npm run admin:build
