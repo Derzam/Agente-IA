@@ -1,8 +1,8 @@
 # Flujos Conversacionales de WhatsApp — Agente IA para Restaurante
 
-> **Versión:** 1.0.0 — Fase 1 (UX y Especificación Conversacional)  
-> **Responsable:** Antigravity (Product Designer / UX / Frontend)  
-> **Canal:** WhatsApp Business Cloud API  
+> **Versión:** 1.0.0 — Fase 1 (UX y Especificación Conversacional)
+> **Responsable:** Antigravity (Product Designer / UX / Frontend)
+> **Canal:** WhatsApp Business Cloud API
 > **Regla de oro:** La IA nunca inventa precios, productos, disponibilidad ni tiempos de entrega. Todo dato operativo proviene del backend/base de datos vía contratos validados.
 
 ---
@@ -63,14 +63,14 @@
   3. Si es cliente recurrente, recupera su nombre de pila registrado.
 - **Respuesta del bot:**
   > "¡Hola Carlos! Bienvenido a **Burger Station** 🍔
-  > 
+  >
   > Estamos abiertos y listos para tomar tu pedido. ¿Qué te provoca hoy?
-  > 
-  > 1️⃣ Ver el Menú completo  
-  > 2️⃣ Conocer las Promos del día  
-  > 3️⃣ Repetir mi último pedido  
-  > 4️⃣ Hablar con un asesor humano  
-  > 
+  >
+  > 1️⃣ Ver el Menú completo
+  > 2️⃣ Conocer las Promos del día
+  > 3️⃣ Repetir mi último pedido
+  > 4️⃣ Hablar con un asesor humano
+  >
   > Escríbeme tu opción o cuéntame directo lo que deseas pedir."
 - **Siguiente estado:** `IDLE_WAITING_CHOICE`
 - **Posibles errores:** Fuera de horario (deriva a flujo U). Error de base de datos (responde saludo genérico sin nombre).
@@ -86,14 +86,14 @@
   2. Obtiene URL del menú web interactivo / PDF optimizado.
 - **Respuesta del bot:**
   > "Aquí tienes nuestras categorías de hoy:
-  > 
-  > 🍔 **Hamburguesas Artesanales** (desde \$6.50)  
-  > 🍟 **Acompañamientos y Snacks** (desde \$2.50)  
-  > 🥤 **Bebidas y Malteadas** (desde \$1.80)  
-  > 🍨 **Postres** (desde \$3.00)  
-  > 
-  > 📱 Puedes ver el menú con fotos aquí: *https://menu.burgerstation.com*  
-  > 
+  >
+  > 🍔 **Hamburguesas Artesanales** (desde \$6.50)
+  > 🍟 **Acompañamientos y Snacks** (desde \$2.50)
+  > 🥤 **Bebidas y Malteadas** (desde \$1.80)
+  > 🍨 **Postres** (desde \$3.00)
+  >
+  > 📱 Puedes ver el menú con fotos aquí: *https://menu.burgerstation.com*
+  >
   > O si prefieres, dime qué categoría te gustaría ver en detalle aquí mismo."
 - **Siguiente estado:** `MENU_BROWSING`
 - **Posibles errores:** Menú no disponible en backend (mensaje de disculpa y menú en texto de emergencia).
@@ -109,10 +109,10 @@
   2. Consulta al catálogo filtrado por stock activo.
 - **Respuesta del bot:**
   > "¡Sí! Para opciones vegetarianas tenemos:
-  > 
-  > 🌱 **Green Burger**: Medallón de lentejas y champiñones, queso gouda vegano, lechuga y tomate — **\$7.20**  
-  > 🌱 **Falafel Bites (8 und)**: Croquetas crocantes con salsa tártara vegana — **\$4.00**  
-  > 
+  >
+  > 🌱 **Green Burger**: Medallón de lentejas y champiñones, queso gouda vegano, lechuga y tomate — **\$7.20**
+  > 🌱 **Falafel Bites (8 und)**: Croquetas crocantes con salsa tártara vegana — **\$4.00**
+  >
   > ¿Deseas agregar alguna a tu pedido?"
 - **Siguiente estado:** `PRODUCT_OFFERED`
 - **Posibles errores:** Filtro sin coincidencias (deriva a flujo E).
@@ -128,8 +128,8 @@
   2. Consulta precio actual de venta y posibles combos asociados.
 - **Respuesta del bot:**
   > "La **Burger Doble Queso** cuesta **\$8.50**.
-  > 
-  > Incluye: doble carne 150g, doble queso cheddar fundido, cebolla caramelizada y salsa de la casa.  
+  >
+  > Incluye: doble carne 150g, doble queso cheddar fundido, cebolla caramelizada y salsa de la casa.
   > 🍟 ¿Te gustaría hacerla combo (papas + gaseosa) por **+\$2.50**?"
 - **Siguiente estado:** `PRODUCT_UPSELL`
 - **Posibles errores:** Varios productos coinciden (ej. "Doble Queso Sencilla" vs "Doble Queso Bacon"). El bot pregunta cuál de los dos prefiere.
@@ -145,7 +145,7 @@
   2. Busca categorías más afines del restaurante (hamburguesas, sándwiches).
 - **Respuesta del bot:**
   > "Disculpa, no contamos con *sushi* en nuestra carta. En **Burger Station** nos especializamos en hamburguesas artesanales, alitas y papas fritas.
-  > 
+  >
   > ¿Te gustaría revisar nuestras hamburguesas más pedidas o ver la carta completa?"
 - **Siguiente estado:** `MENU_BROWSING`
 - **Posibles errores:** Malentendido por regionalismos o errores ortográficos (el bot sugiere: "¿Te refieres a...?").
@@ -161,9 +161,9 @@
   2. El backend devuelve sustitutos recomendados en la misma categoría.
 - **Respuesta del bot:**
   > "¡Uy! La **Mega Monster** se agotó por el día de hoy debido a alta demanda 🙏.
-  > 
+  >
   > Te recomiendo probar la **Bacon BBQ Deluxe** (\$8.90), que tiene el mismo corte de carne y tocino crujiente, o la **Doble Smash** (\$8.20).
-  > 
+  >
   > ¿Te gustaría que agreguemos alguna de estas opciones?"
 - **Siguiente estado:** `PRODUCT_SUBSTITUTION`
 - **Posibles errores:** Cliente reitera que solo quería ese producto (se ofrece disculpa y aviso de stock futuro).
@@ -179,18 +179,18 @@
   2. Revisa si el producto tiene opciones obligatorias (ej. término de la carne, tipo de queso, bebida del combo).
   3. Si no faltan opciones, crea o actualiza el carrito en base de datos.
 - **Respuesta del bot (caso con opciones requeridas):**
-  > "¡Perfecto! 1 **Bacon Burger** (\$8.00).  
-  > 
-  > Por favor elige el término de la carne:  
-  > 🥩 1. Tres cuartos (recomendado)  
-  > 🥩 2. Bien cocida  
-  > 
+  > "¡Perfecto! 1 **Bacon Burger** (\$8.00).
+  >
+  > Por favor elige el término de la carne:
+  > 🥩 1. Tres cuartos (recomendado)
+  > 🥩 2. Bien cocida
+  >
   > ¿Deseas agregar papas fritas medianas por +\$1.50?"
 - **Respuesta del bot (caso completo sin opciones pendientes):**
-  > "✅ Agregado: **2x Clásica Burger** (\$13.00)  
-  > 
-  > 🛒 Tienes **2 productos** en tu carrito: Total parcial: **\$13.00**.  
-  > 
+  > "✅ Agregado: **2x Clásica Burger** (\$13.00)
+  >
+  > 🛒 Tienes **2 productos** en tu carrito: Total parcial: **\$13.00**.
+  >
   > ¿Deseas agregar algo más para picar o una bebida, o pasamos a la entrega?"
 - **Siguiente estado:** `CART_BUILDING` o `CART_REVIEW`
 - **Posibles errores:** Cantidad no especificada (asume 1 y confirma), número irreal (ej. 50 unidades, requiere confirmación o aviso al restaurante).
@@ -205,10 +205,10 @@
   1. Identifica el ítem específico en el carrito del cliente.
   2. Actualiza la cantidad en el backend recalculando subtotales.
 - **Respuesta del bot:**
-  > "Listo, actualicé la cantidad 👍:  
-  > 
-  > 🍔 **3x Clásica Burger** — \$19.50  
-  > 
+  > "Listo, actualicé la cantidad 👍:
+  >
+  > 🍔 **3x Clásica Burger** — \$19.50
+  >
   > Subtotal actual: **\$19.50**. ¿Deseas sumar algo más?"
 - **Siguiente estado:** `CART_BUILDING`
 - **Posibles errores:** El producto a modificar no existe en el carrito (se le muestra el carrito actual).
@@ -223,12 +223,12 @@
   1. Localiza el ítem en la lista activa del carrito.
   2. Ejecuta borrado lógico/físico en backend.
 - **Respuesta del bot:**
-  > "He eliminado **Alitas BBQ (6 und)** de tu pedido.  
-  > 
-  > Tu carrito ahora tiene:  
-  > • 1x Bacon Burger (\$8.00)  
-  > • 1x Papas Rústicas (\$2.50)  
-  > 
+  > "He eliminado **Alitas BBQ (6 und)** de tu pedido.
+  >
+  > Tu carrito ahora tiene:
+  > • 1x Bacon Burger (\$8.00)
+  > • 1x Papas Rústicas (\$2.50)
+  >
   > Total: **\$10.50**. ¿Deseas continuar?"
 - **Siguiente estado:** `CART_BUILDING`
 - **Posibles errores:** Si el carrito queda vacío, responde: "Tu carrito ahora está vacío. ¿Qué se te antoja ordenar?".
@@ -243,9 +243,9 @@
   1. Asocia la nota al ítem específico del carrito (o nota general del pedido).
   2. Guarda `customer_notes` en backend.
 - **Respuesta del bot:**
-  > "Anotado en cocina 👨‍🍳:  
-  > ✍️ *'Sin cebolla ni mayonesa, salsa picante aparte'*.  
-  > 
+  > "Anotado en cocina 👨‍🍳:
+  > ✍️ *'Sin cebolla ni mayonesa, salsa picante aparte'*.
+  >
   > ¿Alguna otra instrucción especial o procedemos con tu dirección de entrega?"
 - **Siguiente estado:** `CART_BUILDING`
 - **Posibles errores:** Observaciones que implican cobro adicional (ej. "agrégale doble carne extra"); el bot detecta el extra y aclara el costo adicional antes de confirmar.
@@ -260,19 +260,19 @@
   1. Consulta backend para obtener ítems, precios unitarios, notas y subtotal.
 - **Respuesta del bot:**
   > "📋 **Tu Carrito Actual:**
-  > 
-  > 1️⃣ 2x Clásica Burger — \$13.00  
-  > ↳ *Término 3/4, sin pepinillos*  
-  > 2️⃣ 1x Papas Rústicas con Queso — \$3.50  
-  > 3️⃣ 2x Coca-Cola Zero 500ml — \$3.60  
-  > 
-  > ────────────────  
-  > 💰 **Subtotal:** \$20.10  
-  > *(Costo de delivery se calcula según tu dirección).*  
-  > 
-  > ¿Deseas:  
-  > 🛵 **1. Pedir a Domicilio**  
-  > 🛍️ **2. Retirar en el Local**  
+  >
+  > 1️⃣ 2x Clásica Burger — \$13.00
+  > ↳ *Término 3/4, sin pepinillos*
+  > 2️⃣ 1x Papas Rústicas con Queso — \$3.50
+  > 3️⃣ 2x Coca-Cola Zero 500ml — \$3.60
+  >
+  > ────────────────
+  > 💰 **Subtotal:** \$20.10
+  > *(Costo de delivery se calcula según tu dirección).*
+  >
+  > ¿Deseas:
+  > 🛵 **1. Pedir a Domicilio**
+  > 🛍️ **2. Retirar en el Local**
   > ➕ **3. Seguir agregando**"
 - **Siguiente estado:** `CART_SELECTION_FULFILLMENT`
 - **Posibles errores:** Carrito vacío.
@@ -288,10 +288,10 @@
   2. Costo de delivery = \$0.00.
   3. Recupera dirección de la sucursal y tiempo estimado de cocina.
 - **Respuesta del bot:**
-  > "Excelente, prepararás tu retiro en nuestro local:  
-  > 📍 **Av. Principal 123, Miraflores**  
-  > ⏱️ Tiempo estimado: **20-25 minutos**.  
-  > 
+  > "Excelente, prepararás tu retiro en nuestro local:
+  > 📍 **Av. Principal 123, Miraflores**
+  > ⏱️ Tiempo estimado: **20-25 minutos**.
+  >
   > ¿A nombre de quién registramos el pedido y tu número de contacto?"
 - **Siguiente estado:** `CHECKOUT_PICKUP_DETAILS`
 - **Posibles errores:** Sucursal cerrada para retiro.
@@ -306,8 +306,8 @@
   1. Fija `fulfillment_type = 'delivery'`.
   2. Verifica disponibilidad de repartidores / radio de cobertura.
 - **Respuesta del bot:**
-  > "¡Listo para delivery! 🛵  
-  > 
+  > "¡Listo para delivery! 🛵
+  >
   > Por favor comparte tu **ubicación actual por WhatsApp** 📎 o escríbeme tu dirección exacta (Calle, Número, Edificio/Piso y Referencia)."
 - **Siguiente estado:** `AWAITING_ADDRESS`
 - **Posibles errores:** Lluvia extrema o flota llena (aviso de retraso preventivo).
@@ -323,10 +323,10 @@
   2. Verifica si el punto está dentro de las zonas de reparto (`delivery_zones`).
   3. Calcula la tarifa de envío correspondiente.
 - **Respuesta del bot (dentro de cobertura):**
-  > "📍 Dirección recibida: **Calle Los Sauces 450, dpto 302**  
-  > 🛵 Costo de envío: **\$2.00**  
-  > ⏱️ Tiempo estimado de entrega: **35-45 minutos**  
-  > 
+  > "📍 Dirección recibida: **Calle Los Sauces 450, dpto 302**
+  > 🛵 Costo de envío: **\$2.00**
+  > ⏱️ Tiempo estimado de entrega: **35-45 minutos**
+  >
   > ¿Alguna referencia para el repartidor? (ej. timbre, portón negro, dejar en recepción)."
 - **Siguiente estado:** `ADDRESS_CONFIRMED`
 - **Posibles errores:** Coordenadas erróneas o dirección ambigua (el bot pide número municipal o calle transversal).
@@ -341,11 +341,11 @@
   1. El backend evalúa la zona y devuelve `is_in_coverage = false`.
 - **Respuesta del bot:**
   > "Lo sentimos mucho 😔. Por el momento tu dirección está fuera de nuestra zona de cobertura para delivery directo (nuestro radio llega hasta 7 km).
-  > 
-  > Pero tenemos dos alternativas:  
-  > 1️⃣ Puedes **recoger tu pedido en local** (Av. Principal 123) y te lo tenemos listo en 20 min.  
-  > 2️⃣ Enviar tu propio repartidor / courier (Rappi Favores, Uber Flash, etc.).  
-  > 
+  >
+  > Pero tenemos dos alternativas:
+  > 1️⃣ Puedes **recoger tu pedido en local** (Av. Principal 123) y te lo tenemos listo en 20 min.
+  > 2️⃣ Enviar tu propio repartidor / courier (Rappi Favores, Uber Flash, etc.).
+  >
   > ¿Te gustaría cambiar a Retiro en Local?"
 - **Siguiente estado:** `OUT_OF_COVERAGE_RESOLUTION`
 - **Posibles errores:** Cliente insiste (se le ofrece transferir con un encargado para cotización especial).
@@ -362,19 +362,19 @@
   3. Al confirmar el pago, genera la orden con estado `PENDING` (o `AWAITING_PAYMENT_PROOF`) y código único (ej. `#BS-1082`).
   4. Dispara notificación al Panel de Pedidos de Cocina.
 - **Respuesta del bot:**
-  > "🎉 ¡Pedido confirmado con éxito!  
-  > 
-  > 🔖 **Pedido #BS-1082**  
-  > ────────────────  
-  > • 2x Clásica Burger  
-  > • 1x Papas Rústicas  
-  > • 2x Bebidas  
-  > 🛵 Envío: \$2.00  
-  > 💰 **Total a pagar:** **\$22.10**  
-  > 💳 Método: Pago con tarjeta contra entrega  
-  > 📍 Entrega en: Calle Los Sauces 450, dpto 302  
-  > ⏱️ Tiempo estimado: **35-45 minutos**  
-  > 
+  > "🎉 ¡Pedido confirmado con éxito!
+  >
+  > 🔖 **Pedido #BS-1082**
+  > ────────────────
+  > • 2x Clásica Burger
+  > • 1x Papas Rústicas
+  > • 2x Bebidas
+  > 🛵 Envío: \$2.00
+  > 💰 **Total a pagar:** **\$22.10**
+  > 💳 Método: Pago con tarjeta contra entrega
+  > 📍 Entrega en: Calle Los Sauces 450, dpto 302
+  > ⏱️ Tiempo estimado: **35-45 minutos**
+  >
   > Puedes consultar el estado de tu orden en cualquier momento escribiendo *'estado'*. ¡Muchas gracias por tu compra!"
 - **Siguiente estado:** `ORDER_PLACED`
 - **Posibles errores:** Falla de red en webhook/DB (se informa que se está procesando y no se cobra doble).
@@ -389,8 +389,8 @@
   1. No crea la orden definitiva.
   2. Mantiene el carrito intacto y retrocede al estado de edición.
 - **Respuesta del bot:**
-  > "Sin problema, aún no hemos enviado el pedido a cocina 👍.  
-  > 
+  > "Sin problema, aún no hemos enviado el pedido a cocina 👍.
+  >
   > ¿Qué te gustaría modificar o agregar?"
 - **Siguiente estado:** `CART_BUILDING`
 - **Posibles errores:** Confusión si el cliente solo quería cambiar el método de pago (se atiende con flexibilidad).
@@ -405,9 +405,9 @@
   1. Busca la última orden activa asociada al teléfono del remitente.
   2. Consulta estado en backend (`pending`, `confirmed`, `in_kitchen`, `out_for_delivery`, `delivered`).
 - **Respuesta del bot:**
-  > "Tu pedido **#BS-1082** está:  
-  > 👨‍🍳 **En Cocina / Preparación**.  
-  > 
+  > "Tu pedido **#BS-1082** está:
+  > 👨‍🍳 **En Cocina / Preparación**.
+  >
   > Salió del horno hace 5 minutos y se está empaquetando. En aprox. 15 minutos nuestro repartidor saldrá hacia tu dirección. Te avisaremos apenas vaya en camino 🛵."
 - **Siguiente estado:** `ORDER_TRACKING`
 - **Posibles errores:** No hay pedidos activos para ese número (pregunta por el número de ticket).
@@ -423,8 +423,8 @@
   2. Pausa las respuestas automáticas de la IA para este usuario.
   3. Emite alerta sonora y visual en el Panel Administrativo (Bandeja de Conversaciones).
 - **Respuesta del bot:**
-  > "Entendido, te estoy comunicando con un compañero de nuestro equipo de atención humana 👨‍💼.  
-  > 
+  > "Entendido, te estoy comunicando con un compañero de nuestro equipo de atención humana 👨‍💼.
+  >
   > He pausado el asistente automático. Un asesor leerá tu conversación y te responderá por aquí en unos minutos. ¡Gracias por tu paciencia!"
 - **Siguiente estado:** `HANDOFF_ACTIVE`
 - **Posibles errores:** Fuera de horario de personal (se notifica que el personal responderá a primera hora).
@@ -440,8 +440,8 @@
   2. Si `fallback_count == 1`, repregunta con opciones guiadas.
   3. Si `fallback_count >= 2`, ofrece transferencia automática a humano.
 - **Respuesta del bot (primer intento):**
-  > "Disculpa, no logré entender tu mensaje 🤔.  
-  > 
+  > "Disculpa, no logré entender tu mensaje 🤔.
+  >
   > ¿Deseas ver el **Menú**, consultar el **Estado de tu pedido** o prefieres que te atienda un **Asesor humano**?"
 - **Respuesta del bot (segundo intento consecutivo):**
   > "Parece que estoy teniendo dificultades para comprenderte bien. Para no hacerte esperar, ¿deseas que te transfiera ahora mismo con una persona de nuestro equipo?"
@@ -457,11 +457,11 @@
 - **Acción del sistema:**
   1. Backend evalúa `business_hours` de la fecha/hora actual.
 - **Respuesta del bot:**
-  > "¡Hola! Gracias por escribir a **Burger Station** 🌙.  
-  > 
-  > En este momento nos encontramos descansando. Nuestro horario de atención es:  
-  > 🕒 **Lunes a Domingo de 12:00 PM a 11:00 PM**  
-  > 
+  > "¡Hola! Gracias por escribir a **Burger Station** 🌙.
+  >
+  > En este momento nos encontramos descansando. Nuestro horario de atención es:
+  > 🕒 **Lunes a Domingo de 12:00 PM a 11:00 PM**
+  >
   > Puedes dejarnos tu mensaje o revisar nuestro menú para mañana aquí: *https://menu.burgerstation.com*. ¡Estaremos felices de atenderte apenas abramos!"
 - **Siguiente estado:** `IDLE_CLOSED`
 - **Posibles errores:** Clientes que quieren programar pedidos para el día siguiente (futura funcionalidad).
@@ -477,8 +477,8 @@
   2. Si el pedido está en `pending` (aún no entra a freidora/plancha), se permite cancelación automática.
   3. Si el pedido está en `in_kitchen` o `out_for_delivery`, NO se cancela automáticamente por IA: se pasa a humano con etiqueta de urgencia.
 - **Respuesta del bot (en cocina / en reparto):**
-  > "Tu pedido **#BS-1082** ya se encuentra en preparación en cocina 👨‍🍳.  
-  > 
+  > "Tu pedido **#BS-1082** ya se encuentra en preparación en cocina 👨‍🍳.
+  >
   > Para solicitar una anulación en este punto, te transfiero de inmediato con el supervisor de turno para que evalúe tu caso. Un momento por favor."
 - **Siguiente estado:** `HANDOFF_URGENT_CANCEL`
 - **Posibles errores:** Intento de cancelación maliciosa después de entregado.
@@ -494,8 +494,8 @@
   2. Registra logs en backend con requestId.
   3. Mantiene el canal abierto sin bloquear al usuario.
 - **Respuesta del bot:**
-  > "Tuvimos un pequeño inconveniente técnico momentáneo al consultar el sistema 🛠️.  
-  > 
+  > "Tuvimos un pequeño inconveniente técnico momentáneo al consultar el sistema 🛠️.
+  >
   > Por favor intenta reenviar tu mensaje en 1 minuto, o si es urgente, llama directamente a nuestro local al 📞 **+51 987 654 321**."
 - **Siguiente estado:** `RETRY_STATE`
 - **Posibles errores:** Webhook caído; Meta reintenta automáticamente con backoff exponencial.
