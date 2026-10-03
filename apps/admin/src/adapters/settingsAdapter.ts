@@ -1,6 +1,6 @@
 /**
  * Settings Adapter
- * 
+ *
  * CONTRACT GAPS IDENTIFIED:
  * - OpenAPI /settings provides: opening_hours, accepting_orders, delivery_enabled, pickup_enabled, min_order_minor, session_ttl_minutes, ai_enabled.
  * - OpenAPI /businesses/{id} provides: name, slug, currency, timezone, status.
@@ -20,7 +20,6 @@ import type {
   AgentConfig as ViewModelAgentConfig,
   BusinessDayHours,
 } from '@/types/viewModels';
-import { minorToDecimal } from './moneyAdapter';
 
 const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
@@ -58,8 +57,8 @@ export function mapDtoToViewModelBusinessSettings(
   return {
     name: business?.name || 'Mi Negocio',
     legalName: business?.name,
-    supportPhone: '+593 9** *** ***',
-    address: 'Ubicación configurada en delivery zones',
+    supportPhone: '',
+    address: '',
     currencySymbol: business?.currency === 'USD' ? '$' : business?.currency || '$',
     isAcceptingOrders: settings.accepting_orders,
     hours: mapOpeningHoursToViewModel(settings.opening_hours),
@@ -69,12 +68,13 @@ export function mapDtoToViewModelBusinessSettings(
 export function mapDtoToViewModelDeliverySettings(
   settings: DTOBusinessSettings
 ): ViewModelDeliverySettings {
+  void settings;
   return {
-    maxCoverageRadiusKm: 5,
-    baseDeliveryFee: minorToDecimal(settings.min_order_minor || 0),
-    perKmFee: 0.5,
-    estimatedPrepTimeMin: 25,
-    estimatedTransitTimeMin: 20,
+    maxCoverageRadiusKm: null,
+    baseDeliveryFee: null,
+    perKmFee: null,
+    estimatedPrepTimeMin: null,
+    estimatedTransitTimeMin: null,
   };
 }
 
@@ -84,13 +84,13 @@ export function mapDtoToViewModelAgentConfig(
 ): ViewModelAgentConfig {
   return {
     isEnabled: settings.ai_enabled,
-    assistantName: fallbackConfig?.assistantName || 'BurgerBot Asistente',
-    tone: fallbackConfig?.tone || 'friendly_casual',
-    welcomeGreeting: fallbackConfig?.welcomeGreeting || '¡Hola! Bienvenido. ¿Qué se te antoja ordenar hoy?',
-    outsideHoursMessage: fallbackConfig?.outsideHoursMessage || 'Hola, en este momento nos encontramos cerrados.',
-    orderConfirmationMessage: fallbackConfig?.orderConfirmationMessage || '¡Tu pedido fue recibido con éxito!',
-    handoffToHumanMessage: fallbackConfig?.handoffToHumanMessage || 'Te comunicaré de inmediato con un asesor humano.',
-    handoffKeywords: fallbackConfig?.handoffKeywords || ['humano', 'asesor', 'queja'],
+    assistantName: fallbackConfig?.assistantName || '',
+    tone: fallbackConfig?.tone || 'unavailable',
+    welcomeGreeting: fallbackConfig?.welcomeGreeting || '',
+    outsideHoursMessage: fallbackConfig?.outsideHoursMessage || '',
+    orderConfirmationMessage: fallbackConfig?.orderConfirmationMessage || '',
+    handoffToHumanMessage: fallbackConfig?.handoffToHumanMessage || '',
+    handoffKeywords: fallbackConfig?.handoffKeywords || [],
     systemDirectives: fallbackConfig?.systemDirectives || '',
     prohibitedTopics: fallbackConfig?.prohibitedTopics || [],
   };
