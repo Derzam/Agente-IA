@@ -115,7 +115,7 @@ export const conversationService = {
       if (index === -1) throw new Error('Conversation not found');
       const updated: ConversationSummary = {
         ...localConversations[index],
-        status: 'resolved',
+        status: 'closed',
       };
       localConversations[index] = updated;
       return Promise.resolve(updated);
