@@ -20,11 +20,25 @@ interface OrderStatusBadgeProps {
 
 export const OrderStatusBadge: React.FC<OrderStatusBadgeProps> = ({ status, size = 'md' }) => {
   switch (status) {
+    case 'awaiting_confirmation':
+      return (
+        <Badge variant="slate" size={size}>
+          <Clock className="w-3.5 h-3.5" />
+          <span>Esperando confirmación</span>
+        </Badge>
+      );
     case 'confirmed':
       return (
         <Badge variant="amber" size={size} className="animate-pulse">
           <Clock className="w-3.5 h-3.5" />
           <span>Nuevo Pedido</span>
+        </Badge>
+      );
+    case 'accepted':
+      return (
+        <Badge variant="orange" size={size}>
+          <CheckCircle2 className="w-3.5 h-3.5" />
+          <span>Aceptado</span>
         </Badge>
       );
     case 'preparing':
