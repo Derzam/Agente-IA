@@ -1,0 +1,14 @@
+{
+  "name": "agente-ia",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "admin:dev": "npm run dev --workspace=@agente-ia/admin",
+    "admin:build": "npm run build --workspace=@agente-ia/admin",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  }
+}
