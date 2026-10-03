@@ -1,9 +1,9 @@
 # Resultado de validación Supabase staging — 2026-10-03
 
-Proyecto: `agente-ia-staging`  
-Project ref: `pqffgbpbreuhivxxctvr`  
-Región: `sa-east-1`  
-PostgreSQL: 17.11  
+Proyecto: `agente-ia-staging`
+Project ref: `pqffgbpbreuhivxxctvr`
+Región: `sa-east-1`
+PostgreSQL: 17.11
 Estado: `ACTIVE_HEALTHY`
 
 ## Aislamiento
