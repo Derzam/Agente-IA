@@ -1,6 +1,6 @@
 /**
  * Metrics Adapter
- * 
+ *
  * CONTRACT GAPS IDENTIFIED:
  * - OpenAPI /metrics returns aggregate numbers for [from, to):
  *   orders_confirmed, orders_cancelled, handoffs_created, sales_minor, currency, generated_at.
