@@ -88,19 +88,19 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
 
     if (!matchesSearch) return false;
     if (selectedStatusFilter === 'all') return true;
-    if (selectedStatusFilter === 'pending') return o.status === 'pending';
-    if (selectedStatusFilter === 'in_kitchen') return o.status === 'in_kitchen';
+    if (selectedStatusFilter === 'confirmed') return o.status === 'confirmed';
+    if (selectedStatusFilter === 'preparing') return o.status === 'preparing';
     if (selectedStatusFilter === 'active_dispatch')
-      return o.status === 'out_for_delivery' || o.status === 'ready_for_pickup';
+      return o.status === 'out_for_delivery' || o.status === 'ready';
     if (selectedStatusFilter === 'delivered') return o.status === 'delivered';
     if (selectedStatusFilter === 'cancelled') return o.status === 'cancelled';
     return true;
   });
 
   const columns: { id: OrderStatus[]; title: string; subtitle: string; color: string }[] = [
-    { id: ['pending'], title: 'Nuevos Pedidos', subtitle: 'Confirmados por WhatsApp', color: 'border-amber-400 bg-amber-50/20' },
-    { id: ['in_kitchen'], title: 'En Preparación', subtitle: 'En plancha o freidora', color: 'border-blue-400 bg-blue-50/20' },
-    { id: ['out_for_delivery', 'ready_for_pickup'], title: 'Despacho & Retiro', subtitle: 'En ruta o en mostrador', color: 'border-indigo-400 bg-indigo-50/20' },
+    { id: ['confirmed'], title: 'Nuevos Pedidos', subtitle: 'Confirmados por WhatsApp', color: 'border-amber-400 bg-amber-50/20' },
+    { id: ['preparing'], title: 'En Preparación', subtitle: 'En plancha o freidora', color: 'border-blue-400 bg-blue-50/20' },
+    { id: ['out_for_delivery', 'ready'], title: 'Despacho & Retiro', subtitle: 'En ruta o en mostrador', color: 'border-indigo-400 bg-indigo-50/20' },
     { id: ['delivered'], title: 'Entregados', subtitle: 'Servicio completado hoy', color: 'border-emerald-400 bg-emerald-50/10' },
   ];
 
@@ -113,9 +113,9 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         searchPlaceholder="Buscar por # pedido, cliente o celular..."
         filters={[
           { id: 'all', label: 'Todos', active: selectedStatusFilter === 'all', count: orders.length, onClick: () => setSelectedStatusFilter('all') },
-          { id: 'pending', label: 'Nuevos', active: selectedStatusFilter === 'pending', count: orders.filter((o) => o.status === 'pending').length, onClick: () => setSelectedStatusFilter('pending') },
-          { id: 'in_kitchen', label: 'En Cocina', active: selectedStatusFilter === 'in_kitchen', count: orders.filter((o) => o.status === 'in_kitchen').length, onClick: () => setSelectedStatusFilter('in_kitchen') },
-          { id: 'active_dispatch', label: 'En Despacho', active: selectedStatusFilter === 'active_dispatch', count: orders.filter((o) => o.status === 'out_for_delivery' || o.status === 'ready_for_pickup').length, onClick: () => setSelectedStatusFilter('active_dispatch') },
+          { id: 'confirmed', label: 'Nuevos', active: selectedStatusFilter === 'confirmed', count: orders.filter((o) => o.status === 'confirmed').length, onClick: () => setSelectedStatusFilter('confirmed') },
+          { id: 'preparing', label: 'En Cocina', active: selectedStatusFilter === 'preparing', count: orders.filter((o) => o.status === 'preparing').length, onClick: () => setSelectedStatusFilter('preparing') },
+          { id: 'active_dispatch', label: 'En Despacho', active: selectedStatusFilter === 'active_dispatch', count: orders.filter((o) => o.status === 'out_for_delivery' || o.status === 'ready').length, onClick: () => setSelectedStatusFilter('active_dispatch') },
           { id: 'delivered', label: 'Entregados', active: selectedStatusFilter === 'delivered', count: orders.filter((o) => o.status === 'delivered').length, onClick: () => setSelectedStatusFilter('delivered') },
         ]}
         actions={
@@ -232,19 +232,19 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                       <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
                         <span className="font-bold text-slate-900 text-sm">${order.total.toFixed(2)}</span>
 
-                        {order.status === 'pending' && (
+                        {order.status === 'confirmed' && (
                           <Button
                             variant="primary"
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleStatusChange(order.id, 'in_kitchen');
+                              handleStatusChange(order.id, 'preparing');
                             }}
                           >
                             A Cocina
                           </Button>
                         )}
-                        {order.status === 'in_kitchen' && (
+                        {order.status === 'preparing' && (
                           <Button
                             variant="secondary"
                             size="sm"
@@ -252,14 +252,14 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                               e.stopPropagation();
                               handleStatusChange(
                                 order.id,
-                                order.fulfillmentType === 'delivery' ? 'out_for_delivery' : 'ready_for_pickup'
+                                order.fulfillmentType === 'delivery' ? 'out_for_delivery' : 'ready'
                               );
                             }}
                           >
                             Listo
                           </Button>
                         )}
-                        {(order.status === 'out_for_delivery' || order.status === 'ready_for_pickup') && (
+                        {(order.status === 'out_for_delivery' || order.status === 'ready') && (
                           <Button
                             variant="success"
                             size="sm"
@@ -373,17 +373,17 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
               </div>
 
               {/* Status advancement in drawer */}
-              {selectedOrder.status === 'pending' && (
+              {selectedOrder.status === 'confirmed' && (
                 <Button
                   variant="primary"
                   size="sm"
                   className="w-full sm:w-auto"
-                  onClick={() => handleStatusChange(selectedOrder.id, 'in_kitchen')}
+                  onClick={() => handleStatusChange(selectedOrder.id, 'preparing')}
                 >
                   Pasar a Cocina 👨‍🍳
                 </Button>
               )}
-              {selectedOrder.status === 'in_kitchen' && (
+              {selectedOrder.status === 'preparing' && (
                 <Button
                   variant="secondary"
                   size="sm"
@@ -391,14 +391,14 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                   onClick={() =>
                     handleStatusChange(
                       selectedOrder.id,
-                      selectedOrder.fulfillmentType === 'delivery' ? 'out_for_delivery' : 'ready_for_pickup'
+                      selectedOrder.fulfillmentType === 'delivery' ? 'out_for_delivery' : 'ready'
                     )
                   }
                 >
                   Marcar Listo para Salir 🛵
                 </Button>
               )}
-              {(selectedOrder.status === 'out_for_delivery' || selectedOrder.status === 'ready_for_pickup') && (
+              {(selectedOrder.status === 'out_for_delivery' || selectedOrder.status === 'ready') && (
                 <Button
                   variant="success"
                   size="sm"
