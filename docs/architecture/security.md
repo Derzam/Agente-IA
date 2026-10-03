@@ -1,5 +1,7 @@
 # Seguridad y amenazas — propuesta
 
+Estado actual: controles foundation IMPLEMENTED y RLS probada en PostgreSQL aislado; ver [fase 2](../phase-02/implementation.md). Matriz restante es requisito futuro, no garantía de producción. Revocación de membership implementada; revocación inmediata de sesión Auth y controles distribuidos aún pendientes.
+
 Activos: secretos, identidad/PII, precios/pedidos, permisos del negocio, presupuesto IA y disponibilidad. Límites: internet→webhook, panel→API, IA→herramientas, runtime→DB, runtime→proveedores. Cada entrada se trata como no confiable.
 
 | Amenaza | Control exigido | Evidencia de prueba futura |
@@ -35,4 +37,4 @@ Rate limits iniciales propuestos: API 120 requests/min por actor y negocio, muta
 
 Consentimiento/política de privacidad, residencia de datos, plazos legales y destinatarios externos deben definirse con negocio antes de producción. Logs con IDs opacos y códigos, no cuerpos completos. Teléfono para correlación mediante HMAC con key fuera de logs; hash simple no anonimiza teléfonos. Dirección solo acceso operativo necesario, sin export masiva por defecto. Auditoría append-only de precios, permisos, estado, handoff y pagos; redactar snapshots de PII/secrets. Retención y eliminación detalladas en modelo de datos.
 
-Fuente primaria: [RLS de Supabase](https://supabase.com/docs/guides/database/postgres/row-level-security), revisión 2026-10-02. Revisado [changelog](https://supabase.com/changelog): cambios PostgreSQL 15.19/17.11 afectan ciertas extensiones/operadores; diseño evita depender de ellas. No se validó ninguna policy en una DB en esta fase; son requisitos de implementación, no garantía de seguridad instalada.
+Fuente primaria: [RLS de Supabase](https://supabase.com/docs/guides/database/postgres/row-level-security), revisión inicial 2026-10-02. Revisado [changelog](https://supabase.com/changelog): cambios PostgreSQL 15.19/17.11 afectan ciertas extensiones/operadores; diseño evita depender de ellas. En fase 2 se validan RLS/GRANT de las cuatro tablas mínimas con roles restringidos locales; no implica despliegue o seguridad de las entidades aún PLANNED.

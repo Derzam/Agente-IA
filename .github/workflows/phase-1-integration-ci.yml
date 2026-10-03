@@ -1,4 +1,4 @@
-name: Phase 1 Integration CI
+name: Architecture and Backend CI
 
 on:
   pull_request:
@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - integration/phase-01-contracts
+      - codex/phase-02-backend-foundation
 
 permissions:
   contents: read
@@ -17,9 +18,22 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate architecture and admin
+    name: Validate backend, architecture and admin
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_DB: agente_ia_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d agente_ia_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      TEST_DATABASE_URL: postgres://postgres@127.0.0.1:5432/agente_ia_test
 
     steps:
       - name: Checkout
@@ -41,6 +55,15 @@ jobs:
 
       - name: Build admin
         run: npm run admin:build
+
+      - name: Build API
+        run: npm run api:build
+
+      - name: Backend, contract and PostgreSQL RLS tests
+        run: npm run api:test
+
+      - name: Audit API production dependencies
+        run: npm audit --omit=dev --workspace=@agente-ia/api --audit-level=high
 
       - name: Check generated OpenAPI
         run: node scripts/build-openapi.mjs --check

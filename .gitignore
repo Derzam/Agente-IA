@@ -4,6 +4,7 @@ dist/
 build/
 .next/
 coverage/
+supabase/.temp/
 
 # Local environment and secrets
 .env

@@ -1,6 +1,6 @@
-# Contratos API v0.1 — propuesta, sin servidor
+# Contratos API v0.1.1 — estado parcial de fase 2
 
-Especificación máquina: [openapi.json](openapi.json), OpenAPI 3.1. Tipos: [packages/shared](../../packages/shared/README.md). No hay URL operativa, SDK, implementación ni autenticación instalada. Los ejemplos usan UUID ficticios y datos sintéticos.
+Especificación máquina: [openapi.json](openapi.json), OpenAPI 3.1. Tipos: [packages/shared](../../packages/shared/README.md). IMPLEMENTED: GET /v1/me, GET negocio, GET/POST webhook y GET health/ready; resto PLANNED. Backend local sin URL pública ni Supabase/Meta reales conectados. [Límites y ejecución](../phase-02/implementation.md), [extensión justificada](../phase-02/openapi-compatibility.md). Los ejemplos usan UUID ficticios y datos sintéticos.
 
 ## Reglas comunes
 
