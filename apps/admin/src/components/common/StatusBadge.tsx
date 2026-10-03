@@ -20,14 +20,14 @@ interface OrderStatusBadgeProps {
 
 export const OrderStatusBadge: React.FC<OrderStatusBadgeProps> = ({ status, size = 'md' }) => {
   switch (status) {
-    case 'pending':
+    case 'confirmed':
       return (
         <Badge variant="amber" size={size} className="animate-pulse">
           <Clock className="w-3.5 h-3.5" />
           <span>Nuevo Pedido</span>
         </Badge>
       );
-    case 'in_kitchen':
+    case 'preparing':
       return (
         <Badge variant="blue" size={size}>
           <Flame className="w-3.5 h-3.5 text-blue-600" />
@@ -41,7 +41,7 @@ export const OrderStatusBadge: React.FC<OrderStatusBadgeProps> = ({ status, size
           <span>En Camino</span>
         </Badge>
       );
-    case 'ready_for_pickup':
+    case 'ready':
       return (
         <Badge variant="indigo" size={size}>
           <Store className="w-3.5 h-3.5 text-indigo-600" />
@@ -81,7 +81,7 @@ export const ConversationStatusBadge: React.FC<ConversationStatusBadgeProps> = (
           <span>IA Activa</span>
         </Badge>
       );
-    case 'waiting_human':
+    case 'human_pending':
       return (
         <Badge variant="rose" size={size} className="animate-pulse font-bold border-rose-300">
           <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
@@ -95,7 +95,7 @@ export const ConversationStatusBadge: React.FC<ConversationStatusBadgeProps> = (
           <span>Atendido por Humano</span>
         </Badge>
       );
-    case 'resolved':
+    case 'closed':
       return (
         <Badge variant="slate" size={size}>
           <CheckCircle2 className="w-3.5 h-3.5 text-slate-500" />
