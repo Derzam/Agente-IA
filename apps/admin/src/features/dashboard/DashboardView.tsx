@@ -50,16 +50,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       ]);
       setMetrics(m);
       setActiveOrders(orders.filter((o: Order) => o.status !== 'delivered' && o.status !== 'cancelled'));
-      setWaitingChats(convs.filter((c: ConversationSummary) => c.status === 'waiting_human'));
+      setWaitingChats(convs.filter((c: ConversationSummary) => c.status === 'human_pending'));
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleQuickAdvance = async (orderId: string, currentStatus: Order['status']) => {
-    let nextStatus: Order['status'] = 'in_kitchen';
-    if (currentStatus === 'pending') nextStatus = 'in_kitchen';
-    else if (currentStatus === 'in_kitchen') nextStatus = 'out_for_delivery';
+    let nextStatus: Order['status'] = 'preparing';
+    if (currentStatus === 'confirmed') nextStatus = 'preparing';
+    else if (currentStatus === 'preparing') nextStatus = 'out_for_delivery';
     else if (currentStatus === 'out_for_delivery') nextStatus = 'delivered';
 
     await orderService.updateOrderStatus(orderId, nextStatus);
@@ -262,7 +262,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                     <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2">
                       <span className="text-base font-bold text-slate-900">${order.total.toFixed(2)}</span>
-                      {order.status === 'pending' && (
+                      {order.status === 'confirmed' && (
                         <Button
                           variant="primary"
                           size="sm"
@@ -272,7 +272,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           Pasar a Cocina
                         </Button>
                       )}
-                      {order.status === 'in_kitchen' && (
+                      {order.status === 'preparing' && (
                         <Button
                           variant="secondary"
                           size="sm"
@@ -291,7 +291,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           Marcar Entregado
                         </Button>
                       )}
-                      {order.status === 'ready_for_pickup' && (
+                      {order.status === 'ready' && (
                         <Button
                           variant="success"
                           size="sm"
