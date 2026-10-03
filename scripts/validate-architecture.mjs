@@ -47,7 +47,8 @@ for (const [path,item] of Object.entries(doc.paths)) {
     }
   }
 }
-assert.equal(operations,39,'Actualizar conteo si cambia deliberadamente el contrato');
+assert.equal(operations,41,'39 operaciones originales + health/readiness documentados en fase 2');
+assert.equal(Object.values(doc.paths).flatMap(item=>Object.values(item)).filter(op=>op['x-implementation-status']==='IMPLEMENTED').length,6);
 const ts = read('packages/shared/src/index.ts');
 for (const name of ['Role','OrderStatus','OrderAction','ConversationStatus','HandoffReason','ErrorCode','DomainEventType']) {
   const declaration = ts.match(new RegExp(`export type ${name} = ([^;]+);`));
@@ -65,7 +66,7 @@ for (const match of contracts.matchAll(/^\| (GET|POST|PATCH|DELETE) (\S+) \|/gm)
   assert.ok(doc.paths[path]?.[method],`Ruta documental ausente: ${method} ${path}`);
   documented++;
 }
-assert.equal(documented,operations-2,'Todo endpoint admin debe estar documentado');
+assert.equal(documented,operations-4,'Todo endpoint admin debe estar documentado; webhook y probes separados');
 function files(dir) { return readdirSync(dir,{withFileTypes:true}).flatMap(e => e.isDirectory() ? files(resolve(dir,e.name)) : [resolve(dir,e.name)]); }
 const markdownFiles = [resolve(root,'README.md'), ...files(resolve(root,'docs')).filter(p => p.endsWith('.md')), resolve(root,'packages/shared/README.md')];
 for (const path of markdownFiles) {

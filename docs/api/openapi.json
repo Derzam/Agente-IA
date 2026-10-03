@@ -1,16 +1,16 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Agente-IA — contrato de diseño",
-    "version": "0.1.0",
-    "description": "PROPUESTA NO IMPLEMENTADA. No hay server operativo ni endpoints disponibles. Ver docs/api/contracts.md."
+    "title": "Agente-IA — contrato canónico",
+    "version": "0.1.1",
+    "description": "Fase 2: 6 operaciones IMPLEMENTED sin despliegue; resto PLANNED (NO IMPLEMENTADA). Ver docs/phase-02/implementation.md y x-implementation-status."
   },
   "paths": {
     "/v1/me": {
       "get": {
         "operationId": "get_v1_me",
         "summary": "Identidad y negocios autorizados",
-        "description": "PROPUESTA NO IMPLEMENTADA. Autorización y validación de negocio adicionales en docs/api/contracts.md.",
+        "description": "IMPLEMENTED en fase 2, sin despliegue. Autorización y validación en docs/api/contracts.md.",
         "tags": [
           "auth"
         ],
@@ -61,14 +61,15 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "IMPLEMENTED"
       }
     },
     "/v1/businesses/{business_id}": {
       "get": {
         "operationId": "get_v1_businesses_business_id",
         "summary": "Consultar negocio",
-        "description": "PROPUESTA NO IMPLEMENTADA. Autorización y validación de negocio adicionales en docs/api/contracts.md.",
+        "description": "IMPLEMENTED en fase 2, sin despliegue. Autorización y validación en docs/api/contracts.md.",
         "tags": [
           "business"
         ],
@@ -131,7 +132,8 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "IMPLEMENTED"
       },
       "patch": {
         "operationId": "patch_v1_businesses_business_id",
@@ -216,6 +218,7 @@
             "$ref": "#/components/responses/Error503"
           }
         },
+        "x-implementation-status": "PLANNED",
         "requestBody": {
           "required": true,
           "content": {
@@ -295,7 +298,8 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "PLANNED"
       },
       "patch": {
         "operationId": "patch_v1_businesses_business_id_settings",
@@ -380,6 +384,7 @@
             "$ref": "#/components/responses/Error503"
           }
         },
+        "x-implementation-status": "PLANNED",
         "requestBody": {
           "required": true,
           "content": {
@@ -479,7 +484,8 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "PLANNED"
       },
       "post": {
         "operationId": "post_v1_businesses_business_id_categories",
@@ -564,6 +570,7 @@
             "$ref": "#/components/responses/Error503"
           }
         },
+        "x-implementation-status": "PLANNED",
         "requestBody": {
           "required": true,
           "content": {
@@ -669,6 +676,7 @@
             "$ref": "#/components/responses/Error503"
           }
         },
+        "x-implementation-status": "PLANNED",
         "requestBody": {
           "required": true,
           "content": {
@@ -774,7 +782,8 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "PLANNED"
       }
     },
     "/v1/businesses/{business_id}/products": {
@@ -881,7 +890,8 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "PLANNED"
       },
       "post": {
         "operationId": "post_v1_businesses_business_id_products",
@@ -966,6 +976,7 @@
             "$ref": "#/components/responses/Error503"
           }
         },
+        "x-implementation-status": "PLANNED",
         "requestBody": {
           "required": true,
           "content": {
@@ -1071,6 +1082,7 @@
             "$ref": "#/components/responses/Error503"
           }
         },
+        "x-implementation-status": "PLANNED",
         "requestBody": {
           "required": true,
           "content": {
@@ -1176,7 +1188,8 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "PLANNED"
       },
       "get": {
         "operationId": "get_v1_businesses_business_id_products_product_id",
@@ -1253,7 +1266,8 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "PLANNED"
       }
     },
     "/v1/businesses/{business_id}/products/{product_id}/options": {
@@ -1349,6 +1363,7 @@
             "$ref": "#/components/responses/Error503"
           }
         },
+        "x-implementation-status": "PLANNED",
         "requestBody": {
           "required": true,
           "content": {
@@ -1463,6 +1478,7 @@
             "$ref": "#/components/responses/Error503"
           }
         },
+        "x-implementation-status": "PLANNED",
         "requestBody": {
           "required": true,
           "content": {
@@ -1577,7 +1593,8 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "PLANNED"
       }
     },
     "/v1/businesses/{business_id}/delivery-zones": {
@@ -1666,7 +1683,8 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "PLANNED"
       },
       "post": {
         "operationId": "post_v1_businesses_business_id_delivery_zones",
@@ -1751,6 +1769,7 @@
             "$ref": "#/components/responses/Error503"
           }
         },
+        "x-implementation-status": "PLANNED",
         "requestBody": {
           "required": true,
           "content": {
@@ -1856,6 +1875,7 @@
             "$ref": "#/components/responses/Error503"
           }
         },
+        "x-implementation-status": "PLANNED",
         "requestBody": {
           "required": true,
           "content": {
@@ -1961,7 +1981,8 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "PLANNED"
       }
     },
     "/v1/businesses/{business_id}/orders": {
@@ -2068,7 +2089,8 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "PLANNED"
       }
     },
     "/v1/businesses/{business_id}/orders/{order_id}": {
@@ -2147,7 +2169,8 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "PLANNED"
       }
     },
     "/v1/businesses/{business_id}/orders/{order_id}/transitions": {
@@ -2244,6 +2267,7 @@
             "$ref": "#/components/responses/Error503"
           }
         },
+        "x-implementation-status": "PLANNED",
         "requestBody": {
           "required": true,
           "content": {
@@ -2352,7 +2376,8 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "PLANNED"
       }
     },
     "/v1/businesses/{business_id}/orders/{order_id}/payments/cash-record": {
@@ -2448,6 +2473,7 @@
             "$ref": "#/components/responses/Error503"
           }
         },
+        "x-implementation-status": "PLANNED",
         "requestBody": {
           "required": true,
           "content": {
@@ -2547,7 +2573,8 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "PLANNED"
       }
     },
     "/v1/businesses/{business_id}/customers/{customer_id}": {
@@ -2626,7 +2653,8 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "PLANNED"
       }
     },
     "/v1/businesses/{business_id}/conversations": {
@@ -2724,7 +2752,8 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "PLANNED"
       }
     },
     "/v1/businesses/{business_id}/conversations/{conversation_id}": {
@@ -2803,7 +2832,8 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "PLANNED"
       }
     },
     "/v1/businesses/{business_id}/conversations/{conversation_id}/messages": {
@@ -2902,7 +2932,8 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "PLANNED"
       },
       "post": {
         "operationId": "post_v1_businesses_business_id_conversations_conversation_id_messages",
@@ -2997,6 +3028,7 @@
             "$ref": "#/components/responses/Error503"
           }
         },
+        "x-implementation-status": "PLANNED",
         "requestBody": {
           "required": true,
           "content": {
@@ -3109,7 +3141,8 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "PLANNED"
       }
     },
     "/v1/businesses/{business_id}/conversations/{conversation_id}/handoffs": {
@@ -3216,6 +3249,7 @@
             "$ref": "#/components/responses/Error503"
           }
         },
+        "x-implementation-status": "PLANNED",
         "requestBody": {
           "required": true,
           "content": {
@@ -3322,6 +3356,7 @@
             "$ref": "#/components/responses/Error503"
           }
         },
+        "x-implementation-status": "PLANNED",
         "requestBody": {
           "required": true,
           "content": {
@@ -3428,6 +3463,7 @@
             "$ref": "#/components/responses/Error503"
           }
         },
+        "x-implementation-status": "PLANNED",
         "requestBody": {
           "required": true,
           "content": {
@@ -3524,13 +3560,14 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "x-implementation-status": "PLANNED"
       }
     },
     "/webhooks/whatsapp": {
       "get": {
         "operationId": "verifyWhatsAppWebhook",
-        "summary": "PROPUESTA: handshake Meta",
+        "summary": "handshake Meta",
         "security": [],
         "parameters": [
           {
@@ -3580,12 +3617,19 @@
           },
           "403": {
             "description": "Token de verificación incorrecto"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
           }
-        }
+        },
+        "x-implementation-status": "IMPLEMENTED"
       },
       "post": {
         "operationId": "receiveWhatsAppWebhook",
-        "summary": "PROPUESTA: inbox firmado; ACK después de commit",
+        "summary": "inbox firmado; ACK después de commit",
         "security": [],
         "parameters": [
           {
@@ -3623,8 +3667,90 @@
           "413": {
             "description": "Payload supera 1MiB"
           },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
           "503": {
             "description": "No se pudo persistir; Meta debe reintentar"
+          }
+        },
+        "x-implementation-status": "IMPLEMENTED"
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health",
+        "summary": "Estado operativo sin información sensible",
+        "x-implementation-status": "IMPLEMENTED",
+        "security": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Resultado propuesto; ver reglas del dominio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "ready",
+        "summary": "Estado operativo sin información sensible",
+        "x-implementation-status": "IMPLEMENTED",
+        "security": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Resultado propuesto; ver reglas del dominio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ready"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
           }
         }
       }

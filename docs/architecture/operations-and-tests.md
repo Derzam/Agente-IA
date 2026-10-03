@@ -1,5 +1,7 @@
 # Observabilidad, operación y pruebas — propuesta
 
+Estado actual: logs/request ID y suite foundation IMPLEMENTED; métricas exportadas, alertas, workers y pruebas de pedidos siguen PLANNED. [Ejecución y límites](../phase-02/implementation.md), [registro fase 2](../phase-02/validation.md). La sección de verificación fase 1 es histórica.
+
 ## Telemetría mínima
 
 Logs JSON estructurados con timestamp UTC, level, service, environment, request_id, trace_id, business_id, resource_id, causation_id, event_type, error_code y duration_ms. request_id generado/validado en servidor; ninguna cabecera arbitrary inyecta líneas de log. Propagar correlación inbox → turno → herramientas → order → outbox → Meta. IDs opacos; no mensajes, prompts completos, teléfono, dirección, bearer, challenge o respuesta completa de proveedor por defecto.

@@ -1,5 +1,7 @@
 # WhatsApp Cloud API — integración propuesta
 
+PARTIAL en fase 2: GET/POST de ingreso, raw HMAC, normalización e inbox IMPLEMENTED y probados localmente. Envío, worker, plantillas y conexión Meta siguen PLANNED. [Estado verificable](../phase-02/implementation.md).
+
 Usar HTTPS contra Graph API oficial y adaptador propio, no WhatsApp Web. Versión Graph API será explícita en configuración y fijada después de validar documentación y sandbox. No adoptar SDK archivados como runtime. Fase 1 no registra webhooks ni conecta un número.
 
 ## Verificación e ingreso

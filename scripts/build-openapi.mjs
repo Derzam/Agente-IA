@@ -106,6 +106,8 @@ function operation(method, suffix, summary, schema, options = {}) {
   count++;
   const paginationDescription = options.page ? (suffix === '/categories' ? ' Lista ordenada sort_order ASC,id ASC; cursor ligado al orden y tenant.' : ' Lista ordenada created_at DESC,id DESC; cursor ligado a filtros y tenant.') : '';
   const op = { operationId: `${method}_${path.replace(/[{}]/g,'').replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_/, '')}`, summary, description: 'PROPUESTA NO IMPLEMENTADA. Autorización y validación de negocio adicionales en docs/api/contracts.md.' + paginationDescription, tags: [options.tag || suffix.split('/')[1] || 'business'], security: [{ supabaseBearer: [] }], 'x-roles': options.roles || ['owner','manager','operator'], parameters, responses };
+  op['x-implementation-status'] = method === 'get' && (path === '/v1/me' || path === base) ? 'IMPLEMENTED' : 'PLANNED';
+  if (op['x-implementation-status'] === 'IMPLEMENTED') op.description = 'IMPLEMENTED en fase 2, sin despliegue. Autorización y validación en docs/api/contracts.md.';
   if (options.body) op.requestBody = { required:true, content:content(ref(options.body)) };
   if (mutating) responses[code].headers = { 'Idempotency-Replayed': { description:'true si se devolvió resultado persistido de mismo actor/comando.', schema:bool } };
   (paths[path] ||= {})[method] = op;
@@ -149,9 +151,23 @@ paths['/webhooks/whatsapp'] = {
   get: { operationId:'verifyWhatsAppWebhook',summary:'PROPUESTA: handshake Meta',security:[],parameters:[parameter('hub.mode','query',en('subscribe'),true),parameter('hub.verify_token','query',str(512),true),parameter('hub.challenge','query',str(512),true)],responses:{200:{description:'Challenge literal',content:{'text/plain':{schema:str(512)}}},400:{description:'Query incompleta'},403:{description:'Token de verificación incorrecto'}} },
   post: { operationId:'receiveWhatsAppWebhook',summary:'PROPUESTA: inbox firmado; ACK después de commit',security:[],parameters:[parameter('X-Hub-Signature-256','header',{type:'string',pattern:'^sha256=[a-fA-F0-9]{64}$'},true)],requestBody:{required:true,description:'Payload externo Meta: validar esquema de proveedor en adapter, no DTO de panel; raw body <=1MiB.',content:content({type:'object',additionalProperties:true})},responses:{200:{description:'Persistido o duplicado'},400:{description:'JSON inválido'},401:{description:'Firma inválida'},413:{description:'Payload supera 1MiB'},503:{description:'No se pudo persistir; Meta debe reintentar'}} }
 };
-const doc = { openapi:'3.1.0',info:{title:'Agente-IA — contrato de diseño',version:'0.1.0',description:'PROPUESTA NO IMPLEMENTADA. No hay server operativo ni endpoints disponibles. Ver docs/api/contracts.md.'},paths,components:{securitySchemes:{supabaseBearer:{type:'http',scheme:'bearer',bearerFormat:'JWT'}},responses:errorResponses,schemas:S} };
+for (const op of Object.values(paths['/webhooks/whatsapp'])) {
+  op['x-implementation-status']='IMPLEMENTED';
+  op.summary=op.summary.replace('PROPUESTA: ','');
+  op.responses['429']={$ref:'#/components/responses/Error429'};
+  op.responses['500']={$ref:'#/components/responses/Error500'};
+}
+for (const [path,status] of [['/health','ok'],['/ready','ready']]) {
+  paths[path]={get:{operationId:path.slice(1),summary:'Estado operativo sin información sensible',
+    'x-implementation-status':'IMPLEMENTED',security:[],parameters:[],responses:{
+      '200':response(object({status:en(status)})),
+      ...(path==='/ready'?{'503':{$ref:'#/components/responses/Error503'}}:{}),
+      '500':{$ref:'#/components/responses/Error500'}
+    }}};
+}
+const doc = { openapi:'3.1.0',info:{title:'Agente-IA — contrato canónico',version:'0.1.1',description:'Fase 2: 6 operaciones IMPLEMENTED sin despliegue; resto PLANNED (NO IMPLEMENTADA). Ver docs/phase-02/implementation.md y x-implementation-status.'},paths,components:{securitySchemes:{supabaseBearer:{type:'http',scheme:'bearer',bearerFormat:'JWT'}},responses:errorResponses,schemas:S} };
 const serialized = JSON.stringify(doc,null,2) + '\n';
 if (process.argv.includes('--check')) {
   if (readFileSync(target,'utf8') !== serialized) throw new Error('OpenAPI difiere del generador; ejecutar node scripts/build-openapi.mjs');
-  console.log(`OpenAPI consistente: ${count + 2} operaciones propuestas.`);
+  console.log(`OpenAPI consistente: ${count + 4} operaciones canónicas (6 IMPLEMENTED).`);
 } else { writeFileSync(target,serialized); console.log(`Escrito ${target}`); }

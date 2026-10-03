@@ -1,5 +1,7 @@
 # Idempotencia y recuperación — propuesta
 
+PARTIAL en fase 2: inbox de mensajes/estados IMPLEMENTED con UNIQUE y pruebas concurrentes. Componentes de comandos, propuestas/pagos, herramientas, outbox y replay worker siguen PLANNED. [Detalles actuales](../phase-02/implementation.md). Segmentos opacos de claves de inbox se codifican con encodeURIComponent para impedir colisiones por delimitadores.
+
 Garantía: efectos internos atómicos y deduplicados en PostgreSQL; procesamiento y transporte al menos una vez. No garantía exactamente una vez para OpenAI, WhatsApp o futuros pagos.
 
 | Operación | Clave / restricción duradera | Comportamiento |
