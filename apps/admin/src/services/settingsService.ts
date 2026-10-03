@@ -4,7 +4,7 @@
  *   GET /settings
  *   PATCH /settings
  *   GET /businesses/{id}
- * 
+ *
  * Routes such as /settings/business, /settings/delivery, /settings/agent have been
  * removed as they do not exist in the canonical OpenAPI v0.1 contract.
  */
@@ -97,19 +97,11 @@ export const settingsService = {
 
     // Contract Gap: Delivery radius & per-km fee are not present in OpenAPI BusinessSettings.
     // We update min_order_minor based on baseDeliveryFee to preserve backend contract integrity.
-    const updatedDto = await endpoints.updateSettings(
-      {
-        expected_version: version,
-        delivery_enabled: true,
-      },
-      key,
-      undefined,
-      options
-    );
-
-    cachedSettingsVersion = updatedDto.version;
-    localDeliverySettings = { ...settings };
-    return localDeliverySettings;
+    void settings;
+    void key;
+    void version;
+    void options;
+    throw new Error('La configuración avanzada de delivery aún no está disponible en el contrato real.');
   },
 
   async getAgentConfig(options?: RequestOptions): Promise<AgentConfig> {
@@ -148,12 +140,13 @@ export const settingsService = {
     );
 
     cachedSettingsVersion = updatedDto.version;
-    localAgentConfig = { ...config, isEnabled: updatedDto.ai_enabled };
-    return localAgentConfig;
+    return mapDtoToViewModelAgentConfig(updatedDto);
   },
 
   async testAgentPrompt(message: string): Promise<{ reply: string; intent: string }> {
-    // Note: Simulated locally as no test-prompt endpoint exists in OpenAPI v0.1.
+    if (!USE_MOCK_DATA) {
+      throw new Error('El simulador del agente no está disponible en modo real porque OpenAPI no define un endpoint de prueba.');
+    }
     const lower = message.toLowerCase();
     if (lower.includes('hola') || lower.includes('buenas')) {
       return {
