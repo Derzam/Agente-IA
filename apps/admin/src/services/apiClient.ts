@@ -36,3 +36,7 @@ export async function businessRequest<T>(endpoint: string, options?: RequestInit
 export function newIdempotencyKey(): string {
   return crypto.randomUUID();
 }
+
+export function realAdapterPending(area: string): never {
+  throw new Error(`Real API adapter for ${area} is pending Phase 2 contract projection work. Keep USE_MOCK_DATA enabled.`);
+}
