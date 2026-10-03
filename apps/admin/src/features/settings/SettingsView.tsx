@@ -26,9 +26,11 @@ export const SettingsView: React.FC = () => {
 
   // Playground state
   const [testInput, setTestInput] = useState('');
-  const [testChat, setTestChat] = useState<{ sender: 'user' | 'bot'; text: string; intent?: string }[]>([
-    { sender: 'bot', text: '¡Hola! Soy Max en modo de prueba. Escríbeme algo como "Hola", "¿Cuánto cuesta la hamburguesa?" o "Quiero hablar con un humano" para probar mis respuestas.' },
-  ]);
+  const [testChat, setTestChat] = useState<{ sender: 'user' | 'bot'; text: string; intent?: string }[]>(
+    USE_MOCK_DATA
+      ? [{ sender: 'bot', text: '¡Hola! Soy Max en modo de prueba. Escríbeme algo como "Hola", "¿Cuánto cuesta la hamburguesa?" o "Quiero hablar con un humano" para probar mis respuestas.' }]
+      : []
+  );
 
   useEffect(() => {
     loadSettings();
@@ -480,7 +482,7 @@ export const SettingsView: React.FC = () => {
                   <input
                     type="number"
                     step="0.5"
-                    value={deliverySettings.maxCoverageRadiusKm} ?? ''
+                    value={deliverySettings.maxCoverageRadiusKm ?? ''}
                     disabled={!USE_MOCK_DATA}
                     onChange={(e) =>
                       setDeliverySettings({
@@ -500,7 +502,7 @@ export const SettingsView: React.FC = () => {
                   <input
                     type="number"
                     step="0.25"
-                    value={deliverySettings.baseDeliveryFee} ?? ''
+                    value={deliverySettings.baseDeliveryFee ?? ''}
                     disabled={!USE_MOCK_DATA}
                     onChange={(e) =>
                       setDeliverySettings({
@@ -520,7 +522,7 @@ export const SettingsView: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    value={deliverySettings.estimatedPrepTimeMin} ?? ''
+                    value={deliverySettings.estimatedPrepTimeMin ?? ''}
                     disabled={!USE_MOCK_DATA}
                     onChange={(e) =>
                       setDeliverySettings({
@@ -538,7 +540,7 @@ export const SettingsView: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    value={deliverySettings.estimatedTransitTimeMin} ?? ''
+                    value={deliverySettings.estimatedTransitTimeMin ?? ''}
                     disabled={!USE_MOCK_DATA}
                     onChange={(e) =>
                       setDeliverySettings({
