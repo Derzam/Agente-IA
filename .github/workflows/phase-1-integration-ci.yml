@@ -1,0 +1,52 @@
+name: Phase 1 Integration CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - integration/phase-01-contracts
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase-1-integration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate architecture and admin
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck workspaces
+        run: npm run typecheck
+
+      - name: Build admin
+        run: npm run admin:build
+
+      - name: Check generated OpenAPI
+        run: node scripts/build-openapi.mjs --check
+
+      - name: Validate architecture artifacts
+        run: node scripts/validate-architecture.mjs
+
+      - name: Check whitespace errors
+        run: git diff --check HEAD^ HEAD

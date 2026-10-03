@@ -51,4 +51,16 @@ Ambas ramas parten del mismo commit de `main`. Cada agente debe limitar sus camb
 
 ## Estado
 
-Fase 1: preparación de repositorio y especificación técnica/UX. Aún no hay conexión a WhatsApp, OpenAI, Supabase ni sistemas de pago.
+Fase 1: arquitectura y contratos propuestos v0.1. Ver [arquitectura](docs/architecture/README.md), [API](docs/api/contracts.md) y [coordinación con Antigravity](docs/architecture/antigravity-handoff.md). Aún no hay backend ejecutable, conexión a WhatsApp, OpenAI, Supabase ni sistemas de pago.
+
+## Comprobación de artefactos de diseño
+
+Con Node.js instalado, sin dependencias externas:
+
+```sh
+node scripts/build-openapi.mjs --check
+node scripts/validate-architecture.mjs
+git diff --check
+```
+
+Estos comandos revisan especificaciones y consistencia documental; no son pruebas del backend ni de integraciones. El plan de pruebas de fase 2 está en [observabilidad y pruebas](docs/architecture/operations-and-tests.md).
