@@ -1,5 +1,5 @@
 import React from 'react';
-import { OrderStatus, ConversationStatus, FulfillmentType } from '@agente-ia/shared';
+import { OrderStatus, ConversationStatus, FulfillmentType } from '@/types/viewModels';
 import { Badge } from './Badge';
 import {
   Clock,
