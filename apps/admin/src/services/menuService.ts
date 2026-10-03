@@ -1,4 +1,4 @@
-import { MenuItem, MenuItemCategory } from '@agente-ia/shared';
+import { MenuItem, MenuItemCategory } from '@/types/viewModels';
 import { mockMenuItems, mockCategories } from '@/mocks/mockData';
 import { USE_MOCK_DATA, request } from './apiClient';
 
