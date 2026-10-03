@@ -1,4 +1,4 @@
-import { ConversationSummary, ChatMessage } from '@agente-ia/shared';
+import { ConversationSummary, ChatMessage } from '@/types/viewModels';
 import { mockConversations, mockMessagesByConversation } from '@/mocks/mockData';
 import { USE_MOCK_DATA, request } from './apiClient';
 
