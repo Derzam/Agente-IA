@@ -1,4 +1,4 @@
-import { Order, OrderStatus } from '@agente-ia/shared';
+import { Order, OrderStatus } from '@/types/viewModels';
 import { mockOrders } from '@/mocks/mockData';
 import { USE_MOCK_DATA, request } from './apiClient';
 
