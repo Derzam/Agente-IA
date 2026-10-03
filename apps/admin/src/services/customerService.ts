@@ -1,4 +1,4 @@
-import { Customer } from '@agente-ia/shared';
+import { Customer } from '@/types/viewModels';
 import { mockCustomers } from '@/mocks/mockData';
 import { USE_MOCK_DATA, request } from './apiClient';
 
