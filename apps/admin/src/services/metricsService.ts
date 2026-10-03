@@ -1,4 +1,4 @@
-import { DashboardMetrics, HourlySalesData } from '@agente-ia/shared';
+import { DashboardMetrics, HourlySalesData } from '@/types/viewModels';
 import { mockDashboardMetrics, mockHourlySales } from '@/mocks/mockData';
 import { USE_MOCK_DATA, request } from './apiClient';
 
