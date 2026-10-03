@@ -11,7 +11,7 @@ import { Button } from '@/components/common/Button';
 import { ConversationStatusBadge } from '@/components/common/StatusBadge';
 import { conversationService } from '@/services/conversationService';
 import { orderService } from '@/services/orderService';
-import { ConversationSummary, ChatMessage, Order } from '@agente-ia/shared';
+import { ConversationSummary, ChatMessage, Order } from '@/types/viewModels';
 import { NavItemKey } from '@/components/layout/Sidebar';
 
 interface ConversationsViewProps {
