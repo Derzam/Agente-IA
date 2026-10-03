@@ -1,7 +1,7 @@
 # Protocolo de Transferencia a Atención Humana (Human Handoff)
 
-> **Versión:** 1.0.0 — Fase 1 (UX y Especificación)  
-> **Área:** Experiencia Conversacional & Panel de Control  
+> **Versión:** 1.0.0 — Fase 1 (UX y Especificación)
+> **Área:** Experiencia Conversacional & Panel de Control
 > **Objetivo:** Definir las reglas, estados y experiencia de usuario cuando una conversación pasa del Agente de IA al personal del restaurante y viceversa.
 
 ---
@@ -74,8 +74,8 @@ La automatización mediante IA en un negocio gastronómico resuelve el 80% de co
 ## 4. Experiencia del Cliente en WhatsApp
 
 ### Mensaje de Entrada en Espera
-> "Entendido, te estoy comunicando con un compañero de nuestro equipo de atención humana 👨‍💼.  
-> 
+> "Entendido, te estoy comunicando con un compañero de nuestro equipo de atención humana 👨‍💼.
+>
 > He pausado mis respuestas automáticas. Un asesor leerá tu conversación y te responderá por aquí en unos minutos. ¡Gracias por tu paciencia!"
 
 ### Comportamiento mientras está en `WAITING_HUMAN`:
@@ -85,8 +85,8 @@ La automatización mediante IA en un negocio gastronómico resuelve el 80% de co
   > *"Seguimos buscando a un asesor disponible para ti. En horas punta podemos demorar un poquito más. Si tu consulta es urgente sobre un pedido en curso, también puedes llamarnos al +51 987 654 321."*
 
 ### Mensaje al Devolver la Conversación a la IA:
-> "¡Listo! He reactivado a nuestro asistente virtual 🤖.  
-> 
+> "¡Listo! He reactivado a nuestro asistente virtual 🤖.
+>
 > Puedes continuar revisando el menú o consultando tu pedido en cualquier momento. ¡Buen provecho!"
 
 ---
