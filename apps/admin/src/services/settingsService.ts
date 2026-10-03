@@ -1,4 +1,4 @@
-import { AgentConfig, BusinessSettings, DeliverySettings } from '@agente-ia/shared';
+import { AgentConfig, BusinessSettings, DeliverySettings } from '@/types/viewModels';
 import { mockAgentConfig, mockBusinessSettings, mockDeliverySettings } from '@/mocks/mockData';
 import { USE_MOCK_DATA, request } from './apiClient';
 
