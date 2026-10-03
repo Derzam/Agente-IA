@@ -140,7 +140,7 @@ export interface Customer {
   notes?: string;
 }
 
-export type AgentTone = 'friendly_casual' | 'formal_polite' | 'energetic_youthful';
+export type AgentTone = 'friendly_casual' | 'formal_polite' | 'energetic_youthful' | 'unavailable';
 
 export interface AgentConfig {
   isEnabled: boolean;
@@ -175,11 +175,11 @@ export interface BusinessSettings {
 }
 
 export interface DeliverySettings {
-  maxCoverageRadiusKm: number;
-  baseDeliveryFee: number;
-  perKmFee: number;
-  estimatedPrepTimeMin: number;
-  estimatedTransitTimeMin: number;
+  maxCoverageRadiusKm: number | null;
+  baseDeliveryFee: number | null;
+  perKmFee: number | null;
+  estimatedPrepTimeMin: number | null;
+  estimatedTransitTimeMin: number | null;
 }
 
 export interface TopSellingItem {

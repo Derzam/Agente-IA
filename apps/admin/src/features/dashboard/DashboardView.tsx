@@ -18,6 +18,7 @@ import { metricsService } from '@/services/metricsService';
 import { orderService } from '@/services/orderService';
 import { conversationService } from '@/services/conversationService';
 import { DashboardMetrics, Order, ConversationSummary } from '@/types/viewModels';
+import type { OrderAction } from '@agente-ia/shared';
 import { NavItemKey } from '@/components/layout/Sidebar';
 
 interface DashboardViewProps {
@@ -61,15 +62,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     currentStatus: Order['status'],
     fulfillmentType?: Order['fulfillmentType']
   ) => {
-    let nextStatus: Order['status'] | null = null;
-    if (currentStatus === 'confirmed') nextStatus = 'accepted';
-    else if (currentStatus === 'accepted') nextStatus = 'preparing';
-    else if (currentStatus === 'preparing') nextStatus = 'ready';
-    else if (currentStatus === 'ready') nextStatus = fulfillmentType === 'delivery' ? 'out_for_delivery' : 'delivered';
-    else if (currentStatus === 'out_for_delivery') nextStatus = 'delivered';
+    let action: OrderAction | null = null;
+    if (currentStatus === 'confirmed') action = 'accept';
+    else if (currentStatus === 'accepted') action = 'start_preparation';
+    else if (currentStatus === 'preparing') action = 'mark_ready';
+    else if (currentStatus === 'ready') action = fulfillmentType === 'delivery' ? 'dispatch' : 'complete';
+    else if (currentStatus === 'out_for_delivery') action = 'complete';
 
-    if (!nextStatus) return;
-    await orderService.updateOrderStatus(orderId, nextStatus);
+    if (!action) return;
+    const order = activeOrders.find((o) => o.id === orderId);
+    await orderService.transitionOrder(orderId, action, order?.version || 1);
     loadData();
   };
 

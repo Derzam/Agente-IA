@@ -1,6 +1,6 @@
 # Arquitectura del sistema — propuesta v0.1
 
-Estado: diseño de fase 1; ningún componente descrito está implementado. Leer [inspección inicial](initial-assessment.md), [datos](data-model.md), [contratos](../api/contracts.md) y [decisiones](decisions.md).
+Estado: arquitectura aprobada; implementación parcial de fase 2 documentada en [matriz de estado](../phase-02/implementation.md). HTTP, Auth, PostgreSQL e inbox están IMPLEMENTED; workers, IA, pedidos y outbox siguen PLANNED. Leer [inspección histórica](initial-assessment.md), [datos](data-model.md), [contratos](../api/contracts.md) y [decisiones](decisions.md).
 
 ## Componentes y límites
 
@@ -38,7 +38,7 @@ Elegimos un monolito modular Node.js/TypeScript con dos procesos desplegables (A
 9. Worker comprueba ventana de mensajería, handoff/epoch y permisos de envío; llama a Meta. Persiste provider_message_id y procesa sent/delivered/read/failed sin retroceder estados.
 10. Ante reclamo, petición humana o fallos repetidos, crea handoff, pausa automatización y genera evento para operadores.
 
-## Organización propuesta (no carpetas funcionales actuales)
+## Organización objetivo (subconjunto foundation implementado)
 
 ```text
 apps/api/src/

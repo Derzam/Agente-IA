@@ -15,7 +15,7 @@ Permitir que los clientes consulten el menú y realicen pedidos por WhatsApp, co
 - **Panel:** aplicación web administrativa.
 - **Contratos:** tipos y esquemas compartidos entre API y panel.
 
-La arquitectura es una propuesta inicial y se concretará en la documentación de Fase 1 antes de implementar integraciones de producción.
+La arquitectura aprobada en Fase 1/1.5 guía la implementación. La Fase 2 construye la base backend local sin integraciones de producción.
 
 ## Estructura inicial
 
@@ -36,8 +36,8 @@ tests/
 
 ## Trabajo paralelo
 
-- `codex/phase-01-architecture`: arquitectura técnica, datos, API, seguridad y pruebas.
-- `antigravity/phase-01-ux`: experiencia conversacional, UX/UI y necesidades del panel.
+- `codex/phase-02-backend-foundation`: servidor, PostgreSQL, Auth, inbox WhatsApp, seguridad y tests.
+- `antigravity/phase-02-api-adapters`: adaptadores del panel y UX/UI.
 
 Ambas ramas parten del mismo commit de `main`. Cada agente debe limitar sus cambios a su área y coordinar cualquier modificación de contratos compartidos. No se fusiona ni se despliega sin autorización.
 
@@ -51,7 +51,17 @@ Ambas ramas parten del mismo commit de `main`. Cada agente debe limitar sus camb
 
 ## Estado
 
-Fase 1: arquitectura y contratos propuestos v0.1. Ver [arquitectura](docs/architecture/README.md), [API](docs/api/contracts.md) y [coordinación con Antigravity](docs/architecture/antigravity-handoff.md). Aún no hay backend ejecutable, conexión a WhatsApp, OpenAI, Supabase ni sistemas de pago.
+Fase 2: backend ejecutable con health/readiness, JWT Supabase, `/v1/me`, lectura de negocio e inbox WhatsApp firmado/deduplicado. Migración de cuatro tablas probada en PostgreSQL aislado. Sin conexión a un número Meta/proyecto Supabase real, IA, pedidos o pagos. [Estado IMPLEMENTED/PARTIAL/PLANNED y ejecución](docs/phase-02/implementation.md), [arquitectura](docs/architecture/README.md), [API](docs/api/contracts.md).
+
+```sh
+npm ci
+npm run typecheck
+npm run api:build
+npm run api:test
+npm run admin:build
+```
+
+`api:test` utiliza PostgreSQL temporal o TEST_DATABASE_URL local descartable. Para iniciar el backend configurar credenciales restringidas en .env ignorado y usar `npm run api:dev`; ver requisitos en la guía de implementación. El arranque no aplica migraciones.
 
 ## Comprobación de artefactos de diseño
 

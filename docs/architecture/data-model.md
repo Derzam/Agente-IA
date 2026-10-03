@@ -1,4 +1,6 @@
-# Modelo de datos MVP — diseño lógico, sin migraciones
+# Modelo de datos MVP — fuente de verdad
+
+PARTIAL en fase 2: businesses, business_memberships, whatsapp_channels y webhook_events tienen [migración y tests locales](../phase-02/implementation.md). Resto de tablas PLANNED. No se ha aplicado SQL a producción.
 
 ## Convenciones obligatorias
 

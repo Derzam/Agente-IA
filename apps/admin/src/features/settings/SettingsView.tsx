@@ -13,6 +13,7 @@ import { Switch } from '@/components/common/Switch';
 import { Card, CardHeader, CardBody } from '@/components/common/Card';
 import { Tabs } from '@/components/common/Tabs';
 import { settingsService } from '@/services/settingsService';
+import { USE_MOCK_DATA } from '@/services/apiClient';
 import { AgentConfig, BusinessSettings, DeliverySettings } from '@/types/viewModels';
 
 export const SettingsView: React.FC = () => {
@@ -25,9 +26,11 @@ export const SettingsView: React.FC = () => {
 
   // Playground state
   const [testInput, setTestInput] = useState('');
-  const [testChat, setTestChat] = useState<{ sender: 'user' | 'bot'; text: string; intent?: string }[]>([
-    { sender: 'bot', text: '¡Hola! Soy Max en modo de prueba. Escríbeme algo como "Hola", "¿Cuánto cuesta la hamburguesa?" o "Quiero hablar con un humano" para probar mis respuestas.' },
-  ]);
+  const [testChat, setTestChat] = useState<{ sender: 'user' | 'bot'; text: string; intent?: string }[]>(
+    USE_MOCK_DATA
+      ? [{ sender: 'bot', text: '¡Hola! Soy Max en modo de prueba. Escríbeme algo como "Hola", "¿Cuánto cuesta la hamburguesa?" o "Quiero hablar con un humano" para probar mis respuestas.' }]
+      : []
+  );
 
   useEffect(() => {
     loadSettings();
@@ -52,21 +55,25 @@ export const SettingsView: React.FC = () => {
   const handleSaveAgent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!agentConfig) return;
-    await settingsService.updateAgentConfig(agentConfig);
+    const updated = await settingsService.updateAgentConfig(agentConfig);
+    setAgentConfig(updated);
     showSavedNotification();
   };
 
   const handleSaveBusiness = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!businessSettings) return;
-    await settingsService.updateBusinessSettings(businessSettings);
+    const updated = await settingsService.updateBusinessSettings(businessSettings);
+    setBusinessSettings(updated);
     showSavedNotification();
   };
 
   const handleSaveDelivery = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!deliverySettings) return;
-    await settingsService.updateDeliverySettings(deliverySettings);
+    if (!USE_MOCK_DATA) return;
+    const updated = await settingsService.updateDeliverySettings(deliverySettings);
+    setDeliverySettings(updated);
     showSavedNotification();
   };
 
@@ -83,6 +90,7 @@ export const SettingsView: React.FC = () => {
     setTestChat((prev) => [...prev, { sender: 'user', text: userText }]);
     setTestInput('');
 
+    if (!USE_MOCK_DATA) return;
     const res = await settingsService.testAgentPrompt(userText);
     setTestChat((prev) => [...prev, { sender: 'bot', text: res.reply, intent: res.intent }]);
   };
@@ -111,7 +119,7 @@ export const SettingsView: React.FC = () => {
       {isSavedNotice && (
         <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-800 text-xs font-bold flex items-center gap-2 animate-fadeIn">
           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          Configuración actualizada y sincronizada con éxito.
+          {USE_MOCK_DATA ? 'Configuración de demostración actualizada.' : 'Configuración soportada por el backend actualizada con éxito.'}
         </div>
       )}
 
@@ -150,6 +158,7 @@ export const SettingsView: React.FC = () => {
                       <input
                         type="text"
                         value={agentConfig.assistantName}
+                        disabled={!USE_MOCK_DATA}
                         onChange={(e) =>
                           setAgentConfig({ ...agentConfig, assistantName: e.target.value })
                         }
@@ -161,6 +170,7 @@ export const SettingsView: React.FC = () => {
                       <label className="block font-semibold text-slate-700 mb-1">Tono de Voz:</label>
                       <select
                         value={agentConfig.tone}
+                        disabled={!USE_MOCK_DATA}
                         onChange={(e) =>
                           setAgentConfig({ ...agentConfig, tone: e.target.value as any })
                         }
@@ -169,6 +179,7 @@ export const SettingsView: React.FC = () => {
                         <option value="friendly_casual">Amigable, cálido y cercano (Recomendado)</option>
                         <option value="formal_polite">Formal, sobrio y educado</option>
                         <option value="energetic_youthful">Enérgico, divertido y juvenil</option>
+                        <option value="unavailable">No disponible en API real</option>
                       </select>
                     </div>
                   </div>
@@ -181,6 +192,7 @@ export const SettingsView: React.FC = () => {
                     <textarea
                       rows={2}
                       value={agentConfig.welcomeGreeting}
+                        disabled={!USE_MOCK_DATA}
                       onChange={(e) =>
                         setAgentConfig({ ...agentConfig, welcomeGreeting: e.target.value })
                       }
@@ -196,6 +208,7 @@ export const SettingsView: React.FC = () => {
                     <textarea
                       rows={2}
                       value={agentConfig.outsideHoursMessage}
+                        disabled={!USE_MOCK_DATA}
                       onChange={(e) =>
                         setAgentConfig({ ...agentConfig, outsideHoursMessage: e.target.value })
                       }
@@ -211,6 +224,7 @@ export const SettingsView: React.FC = () => {
                     <textarea
                       rows={2}
                       value={agentConfig.handoffToHumanMessage}
+                        disabled={!USE_MOCK_DATA}
                       onChange={(e) =>
                         setAgentConfig({ ...agentConfig, handoffToHumanMessage: e.target.value })
                       }
@@ -226,6 +240,7 @@ export const SettingsView: React.FC = () => {
                     <input
                       type="text"
                       value={agentConfig.handoffKeywords.join(', ')}
+                        disabled={!USE_MOCK_DATA}
                       onChange={(e) =>
                         setAgentConfig({
                           ...agentConfig,
@@ -248,6 +263,7 @@ export const SettingsView: React.FC = () => {
                     <textarea
                       rows={3}
                       value={agentConfig.systemDirectives}
+                        disabled={!USE_MOCK_DATA}
                       onChange={(e) =>
                         setAgentConfig({ ...agentConfig, systemDirectives: e.target.value })
                       }
@@ -255,9 +271,15 @@ export const SettingsView: React.FC = () => {
                     />
                   </div>
 
+                  {!USE_MOCK_DATA && (
+                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      En modo real solo se persiste el interruptor de activación de IA. Nombre, tono, mensajes, palabras clave y directivas aún no existen en OpenAPI.
+                    </p>
+                  )}
+
                   <div className="pt-3 border-t border-slate-100 flex justify-end">
                     <Button variant="primary" size="md" type="submit" leftIcon={<Save className="w-4 h-4" />}>
-                      Guardar Configuración de IA
+                      {USE_MOCK_DATA ? 'Guardar Configuración de IA' : 'Guardar activación de IA'}
                     </Button>
                   </div>
                 </form>
@@ -275,7 +297,7 @@ export const SettingsView: React.FC = () => {
                     <span>Simulador de Pruebas</span>
                   </div>
                 }
-                subtitle="Chatea con el asistente en tiempo real sin enviar WhatsApp"
+                subtitle={USE_MOCK_DATA ? 'Chatea con el asistente simulado sin enviar WhatsApp' : 'No disponible en modo real hasta existir un endpoint de prueba'}
               />
               <CardBody className="p-3 flex-1 flex flex-col justify-between bg-slate-50">
                 {/* Messages Timeline */}
@@ -309,10 +331,11 @@ export const SettingsView: React.FC = () => {
                     type="text"
                     value={testInput}
                     onChange={(e) => setTestInput(e.target.value)}
-                    placeholder="Escribe un mensaje de prueba..."
+                    placeholder={USE_MOCK_DATA ? 'Escribe un mensaje de prueba...' : 'Simulador no disponible en modo real'}
+                    disabled={!USE_MOCK_DATA}
                     className="flex-1 text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                   />
-                  <Button type="submit" variant="primary" size="sm" disabled={!testInput.trim()}>
+                  <Button type="submit" variant="primary" size="sm" disabled={!USE_MOCK_DATA || !testInput.trim()}>
                     <Send className="w-3.5 h-3.5" />
                   </Button>
                 </form>
@@ -334,6 +357,7 @@ export const SettingsView: React.FC = () => {
                   <input
                     type="text"
                     value={businessSettings.name}
+                    disabled={!USE_MOCK_DATA}
                     onChange={(e) =>
                       setBusinessSettings({ ...businessSettings, name: e.target.value })
                     }
@@ -345,6 +369,8 @@ export const SettingsView: React.FC = () => {
                   <input
                     type="text"
                     value={businessSettings.supportPhone}
+                    disabled={!USE_MOCK_DATA}
+                    placeholder={!USE_MOCK_DATA ? 'No disponible en contrato actual' : undefined}
                     onChange={(e) =>
                       setBusinessSettings({ ...businessSettings, supportPhone: e.target.value })
                     }
@@ -358,12 +384,20 @@ export const SettingsView: React.FC = () => {
                 <input
                   type="text"
                   value={businessSettings.address}
+                  disabled={!USE_MOCK_DATA}
+                  placeholder={!USE_MOCK_DATA ? 'No disponible en contrato actual' : undefined}
                   onChange={(e) =>
                     setBusinessSettings({ ...businessSettings, address: e.target.value })
                   }
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500"
                 />
               </div>
+
+              {!USE_MOCK_DATA && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  En modo real esta pantalla solo guarda horarios y recepción de pedidos. Nombre comercial, teléfono y dirección requieren contratos adicionales.
+                </p>
+              )}
 
               {/* Hours Matrix */}
               <div>
@@ -434,6 +468,11 @@ export const SettingsView: React.FC = () => {
             subtitle="Define el radio de acción y cómo calcula el backend el costo de envío para la IA"
           />
           <CardBody>
+            {!USE_MOCK_DATA && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                Radio, tarifa base, tarifa por km y tiempos estimados todavía no existen en el contrato real. Estos campos están deshabilitados para evitar una falsa persistencia.
+              </p>
+            )}
             <form onSubmit={handleSaveDelivery} className="space-y-4 text-xs sm:text-sm">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -443,7 +482,8 @@ export const SettingsView: React.FC = () => {
                   <input
                     type="number"
                     step="0.5"
-                    value={deliverySettings.maxCoverageRadiusKm}
+                    value={deliverySettings.maxCoverageRadiusKm ?? ''}
+                    disabled={!USE_MOCK_DATA}
                     onChange={(e) =>
                       setDeliverySettings({
                         ...deliverySettings,
@@ -462,7 +502,8 @@ export const SettingsView: React.FC = () => {
                   <input
                     type="number"
                     step="0.25"
-                    value={deliverySettings.baseDeliveryFee}
+                    value={deliverySettings.baseDeliveryFee ?? ''}
+                    disabled={!USE_MOCK_DATA}
                     onChange={(e) =>
                       setDeliverySettings({
                         ...deliverySettings,
@@ -481,7 +522,8 @@ export const SettingsView: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    value={deliverySettings.estimatedPrepTimeMin}
+                    value={deliverySettings.estimatedPrepTimeMin ?? ''}
+                    disabled={!USE_MOCK_DATA}
                     onChange={(e) =>
                       setDeliverySettings({
                         ...deliverySettings,
@@ -498,7 +540,8 @@ export const SettingsView: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    value={deliverySettings.estimatedTransitTimeMin}
+                    value={deliverySettings.estimatedTransitTimeMin ?? ''}
+                    disabled={!USE_MOCK_DATA}
                     onChange={(e) =>
                       setDeliverySettings({
                         ...deliverySettings,
@@ -511,8 +554,8 @@ export const SettingsView: React.FC = () => {
               </div>
 
               <div className="pt-3 border-t border-slate-100 flex justify-end">
-                <Button variant="primary" size="md" type="submit" leftIcon={<Save className="w-4 h-4" />}>
-                  Guardar Configuración de Delivery
+                <Button variant="primary" size="md" type="submit" disabled={!USE_MOCK_DATA} leftIcon={<Save className="w-4 h-4" />}>
+                  {USE_MOCK_DATA ? 'Guardar Configuración de Delivery' : 'No disponible en modo real'}
                 </Button>
               </div>
             </form>

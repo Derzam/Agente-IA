@@ -1,6 +1,6 @@
 # Arquitectura
 
-Fase 1: especificación propuesta v0.1. No hay backend ni integraciones implementadas.
+Arquitectura aprobada en Fase 1/1.5. Fase 2 implementa la base backend; ver [matriz de estado](../phase-02/implementation.md). Documentos de inspección/verificación de fase 1 son registros históricos fechados; los flujos futuros mantienen PLANNED.
 
 - [Inspección inicial](initial-assessment.md)
 - [Arquitectura general](system-architecture.md)

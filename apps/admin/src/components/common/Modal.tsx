@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useId } from 'react';
 import { X } from 'lucide-react';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -8,6 +9,7 @@ export interface ModalProps {
   children: React.ReactNode;
   footer?: React.ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+  initialFocusRef?: React.RefObject<HTMLElement | null>;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -17,20 +19,23 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   footer,
   maxWidth = 'lg',
+  initialFocusRef,
 }) => {
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
+  const titleId = useId();
+  const containerRef = useFocusTrap<HTMLDivElement>({
+    isOpen,
+    onClose,
+    initialFocusRef,
+  });
+
+  React.useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
-      window.addEventListener('keydown', handleKeyDown);
     }
     return () => {
       document.body.style.overflow = 'unset';
-      window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -53,17 +58,22 @@ export const Modal: React.FC<ModalProps> = ({
 
       {/* Modal Dialog */}
       <div
-        className={`relative w-full ${maxWidthClasses[maxWidth]} bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-10 flex flex-col max-h-[90vh]`}
+        ref={containerRef}
+        tabIndex={-1}
+        className={`relative w-full ${maxWidthClasses[maxWidth]} bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-10 flex flex-col max-h-[90vh] focus:outline-none`}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={titleId}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-white">
-          <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+          <h2 id={titleId} className="text-lg font-semibold text-slate-900">
+            {title}
+          </h2>
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-            aria-label="Cerrar modal"
+            aria-label="Cerrar ventana modal"
           >
             <X className="w-5 h-5" />
           </button>
@@ -73,7 +83,11 @@ export const Modal: React.FC<ModalProps> = ({
         <div className="p-5 sm:p-6 overflow-y-auto flex-1">{children}</div>
 
         {/* Footer */}
-        {footer && <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">{footer}</div>}
+        {footer && (
+          <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );
