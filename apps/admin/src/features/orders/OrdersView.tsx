@@ -88,7 +88,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
 
     if (!matchesSearch) return false;
     if (selectedStatusFilter === 'all') return true;
-    if (selectedStatusFilter === 'confirmed') return o.status === 'confirmed';
+    if (selectedStatusFilter === 'confirmed') return o.status === 'confirmed' || o.status === 'accepted';
     if (selectedStatusFilter === 'preparing') return o.status === 'preparing';
     if (selectedStatusFilter === 'active_dispatch')
       return o.status === 'out_for_delivery' || o.status === 'ready';
@@ -98,7 +98,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
   });
 
   const columns: { id: OrderStatus[]; title: string; subtitle: string; color: string }[] = [
-    { id: ['confirmed'], title: 'Nuevos Pedidos', subtitle: 'Confirmados por WhatsApp', color: 'border-amber-400 bg-amber-50/20' },
+    { id: ['confirmed', 'accepted'], title: 'Nuevos Pedidos', subtitle: 'Confirmados por WhatsApp', color: 'border-amber-400 bg-amber-50/20' },
     { id: ['preparing'], title: 'En Preparación', subtitle: 'En plancha o freidora', color: 'border-blue-400 bg-blue-50/20' },
     { id: ['out_for_delivery', 'ready'], title: 'Despacho & Retiro', subtitle: 'En ruta o en mostrador', color: 'border-indigo-400 bg-indigo-50/20' },
     { id: ['delivered'], title: 'Entregados', subtitle: 'Servicio completado hoy', color: 'border-emerald-400 bg-emerald-50/10' },
@@ -113,7 +113,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         searchPlaceholder="Buscar por # pedido, cliente o celular..."
         filters={[
           { id: 'all', label: 'Todos', active: selectedStatusFilter === 'all', count: orders.length, onClick: () => setSelectedStatusFilter('all') },
-          { id: 'confirmed', label: 'Nuevos', active: selectedStatusFilter === 'confirmed', count: orders.filter((o) => o.status === 'confirmed').length, onClick: () => setSelectedStatusFilter('confirmed') },
+          { id: 'confirmed', label: 'Nuevos', active: selectedStatusFilter === 'confirmed', count: orders.filter((o) => o.status === 'confirmed' || o.status === 'accepted').length, onClick: () => setSelectedStatusFilter('confirmed') },
           { id: 'preparing', label: 'En Cocina', active: selectedStatusFilter === 'preparing', count: orders.filter((o) => o.status === 'preparing').length, onClick: () => setSelectedStatusFilter('preparing') },
           { id: 'active_dispatch', label: 'En Despacho', active: selectedStatusFilter === 'active_dispatch', count: orders.filter((o) => o.status === 'out_for_delivery' || o.status === 'ready').length, onClick: () => setSelectedStatusFilter('active_dispatch') },
           { id: 'delivered', label: 'Entregados', active: selectedStatusFilter === 'delivered', count: orders.filter((o) => o.status === 'delivered').length, onClick: () => setSelectedStatusFilter('delivered') },
@@ -238,6 +238,18 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
+                              handleStatusChange(order.id, 'accepted');
+                            }}
+                          >
+                            Aceptar
+                          </Button>
+                        )}
+                        {order.status === 'accepted' && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
                               handleStatusChange(order.id, 'preparing');
                             }}
                           >
@@ -250,16 +262,28 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleStatusChange(
-                                order.id,
-                                order.fulfillmentType === 'delivery' ? 'out_for_delivery' : 'ready'
-                              );
+                              handleStatusChange(order.id, 'ready');
                             }}
                           >
                             Listo
                           </Button>
                         )}
-                        {(order.status === 'out_for_delivery' || order.status === 'ready') && (
+                        {order.status === 'ready' && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStatusChange(
+                                order.id,
+                                order.fulfillmentType === 'delivery' ? 'out_for_delivery' : 'delivered'
+                              );
+                            }}
+                          >
+                            {order.fulfillmentType === 'delivery' ? 'Despachar' : 'Entregar'}
+                          </Button>
+                        )}
+                        {order.status === 'out_for_delivery' && (
                           <Button
                             variant="success"
                             size="sm"
@@ -378,6 +402,16 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                   variant="primary"
                   size="sm"
                   className="w-full sm:w-auto"
+                  onClick={() => handleStatusChange(selectedOrder.id, 'accepted')}
+                >
+                  Aceptar pedido
+                </Button>
+              )}
+              {selectedOrder.status === 'accepted' && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="w-full sm:w-auto"
                   onClick={() => handleStatusChange(selectedOrder.id, 'preparing')}
                 >
                   Pasar a Cocina 👨‍🍳
@@ -388,17 +422,27 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                   variant="secondary"
                   size="sm"
                   className="w-full sm:w-auto"
+                  onClick={() => handleStatusChange(selectedOrder.id, 'ready')}
+                >
+                  Marcar listo
+                </Button>
+              )}
+              {selectedOrder.status === 'ready' && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full sm:w-auto"
                   onClick={() =>
                     handleStatusChange(
                       selectedOrder.id,
-                      selectedOrder.fulfillmentType === 'delivery' ? 'out_for_delivery' : 'ready'
+                      selectedOrder.fulfillmentType === 'delivery' ? 'out_for_delivery' : 'delivered'
                     )
                   }
                 >
-                  Marcar Listo para Salir 🛵
+                  {selectedOrder.fulfillmentType === 'delivery' ? 'Despachar 🛵' : 'Entregar ✓'}
                 </Button>
               )}
-              {(selectedOrder.status === 'out_for_delivery' || selectedOrder.status === 'ready') && (
+              {selectedOrder.status === 'out_for_delivery' && (
                 <Button
                   variant="success"
                   size="sm"
