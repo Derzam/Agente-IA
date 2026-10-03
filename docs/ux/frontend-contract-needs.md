@@ -1,14 +1,14 @@
 # Necesidades de Contratos API con Codex — Frontend / Panel Administrativo
 
-> **Versión:** 1.0.0 — Fase 1  
-> **Área:** Contratos de Integración (Antigravity ↔ Codex)  
+> **Versión:** 1.0.0 — Fase 1
+> **Área:** Contratos de Integración (Antigravity ↔ Codex)
 > **Propósito:** Especificar formalmente los endpoints, modelos de datos, eventos en tiempo real y códigos de error que el panel administrativo (`apps/admin`) requiere del backend (`apps/api`).
 
 ---
 
 ## 1. Principio de Arquitectura e Independencia
 
-1. **Desacoplamiento de Base de Datos:**  
+1. **Desacoplamiento de Base de Datos:**
    El panel administrativo **no se conecta directamente a Supabase** para operaciones de negocio. Toda interacción se realiza a través de la API REST intermedia (`apps/api`) para garantizar que las reglas de negocio (validación de inventario, disparadores de WhatsApp, webhooks de pagos) sean controladas centralmente por el backend.
 2. **Formato Estándar de Respuesta:**
    Todas las respuestas JSON respetarán la estructura estándar:
@@ -165,10 +165,10 @@ Para una experiencia operativa sin fricción en cocina y atención, el frontend 
 
 Para coordinar en Fase 2 de desarrollo:
 
-1. **Protocolo de Autenticación de Administradores:**  
-   ¿Utilizaremos tokens JWT emitidos por Supabase Auth validados en el middleware de `apps/api`, o la API manejará sesiones con cookies `HttpOnly`?  
+1. **Protocolo de Autenticación de Administradores:**
+   ¿Utilizaremos tokens JWT emitidos por Supabase Auth validados en el middleware de `apps/api`, o la API manejará sesiones con cookies `HttpOnly`?
    *Preferencia Frontend:* Bearer JWT en encabezado `Authorization: Bearer <token>` para simplificar peticiones cross-domain.
-2. **Cálculo de Distancia de Delivery:**  
+2. **Cálculo de Distancia de Delivery:**
    ¿El backend calculará la distancia mediante coordenadas directas (Fórmula Haversine contra la latitud/longitud del local) o integrará la API de Google Maps / OSRM?
-3. **Manejo de Concurrencia en Handoff:**  
+3. **Manejo de Concurrencia en Handoff:**
    Si dos operadores intentan hacer clic en "Tomar Control" simultáneamente sobre la misma conversación, la API debe devolver `409 Conflict` al segundo operador con mensaje: *"Esta conversación ya fue asignada a [Operador X]"*.
