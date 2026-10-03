@@ -10,7 +10,7 @@ import {
   DeliverySettings,
   DashboardMetrics,
   HourlySalesData,
-} from '@agente-ia/shared';
+} from '@/types/viewModels';
 
 // ==========================================
 // MOCK CATEGORIES
