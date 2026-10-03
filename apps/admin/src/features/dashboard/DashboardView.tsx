@@ -17,7 +17,7 @@ import { OrderStatusBadge, FulfillmentBadge } from '@/components/common/StatusBa
 import { metricsService } from '@/services/metricsService';
 import { orderService } from '@/services/orderService';
 import { conversationService } from '@/services/conversationService';
-import { DashboardMetrics, Order, ConversationSummary } from '@agente-ia/shared';
+import { DashboardMetrics, Order, ConversationSummary } from '@/types/viewModels';
 import { NavItemKey } from '@/components/layout/Sidebar';
 
 interface DashboardViewProps {
