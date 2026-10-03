@@ -30,8 +30,8 @@ export const App: React.FC = () => {
         orderService.getOrders(),
         conversationService.getConversations(),
       ]);
-      setPendingOrdersCount(orders.filter((o) => o.status === 'pending').length);
-      setWaitingChatsCount(convs.filter((c) => c.status === 'waiting_human').length);
+      setPendingOrdersCount(orders.filter((o) => o.status === 'confirmed').length);
+      setWaitingChatsCount(convs.filter((c) => c.status === 'human_pending').length);
     } catch {
       // Ignore background counter refresh failure
     }
