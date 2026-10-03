@@ -12,7 +12,7 @@ import { Modal } from '@/components/common/Modal';
 import { FilterBar } from '@/components/common/FilterBar';
 import { EmptyState } from '@/components/common/EmptyState';
 import { menuService } from '@/services/menuService';
-import { MenuItem, MenuItemCategory } from '@agente-ia/shared';
+import { MenuItem, MenuItemCategory } from '@/types/viewModels';
 
 export const MenuView: React.FC = () => {
   const [categories, setCategories] = useState<MenuItemCategory[]>([]);
