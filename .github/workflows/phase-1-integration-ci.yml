@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - integration/phase-01-contracts
+      - antigravity/phase-02-api-adapters
 
 permissions:
   contents: read
@@ -38,6 +39,9 @@ jobs:
 
       - name: Typecheck workspaces
         run: npm run typecheck
+
+      - name: Test workspaces
+        run: npm test
 
       - name: Build admin
         run: npm run admin:build
