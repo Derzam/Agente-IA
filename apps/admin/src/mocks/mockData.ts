@@ -160,7 +160,7 @@ export const mockOrders: Order[] = [
     customerId: 'cust-1',
     customerName: 'Carlos Mendoza',
     customerPhone: '+51 987 654 321',
-    status: 'pending',
+    status: 'confirmed',
     fulfillmentType: 'delivery',
     items: [
       {
@@ -211,7 +211,7 @@ export const mockOrders: Order[] = [
     customerId: 'cust-2',
     customerName: 'María López',
     customerPhone: '+51 912 345 678',
-    status: 'in_kitchen',
+    status: 'preparing',
     fulfillmentType: 'delivery',
     items: [
       {
@@ -252,7 +252,7 @@ export const mockOrders: Order[] = [
     customerId: 'cust-3',
     customerName: 'Juan Pérez',
     customerPhone: '+51 999 111 222',
-    status: 'in_kitchen',
+    status: 'preparing',
     fulfillmentType: 'pickup',
     items: [
       {
@@ -330,7 +330,7 @@ export const mockOrders: Order[] = [
     customerId: 'cust-5',
     customerName: 'Sofía Castro',
     customerPhone: '+51 955 333 444',
-    status: 'ready_for_pickup',
+    status: 'ready',
     fulfillmentType: 'pickup',
     items: [
       {
@@ -395,7 +395,7 @@ export const mockConversations: ConversationSummary[] = [
     id: 'conv-1',
     customerPhone: '+51 987 654 321',
     customerName: 'Carlos Mendoza',
-    status: 'waiting_human',
+    status: 'human_pending',
     lastMessageSnippet: 'Por favor ayúdenme, el timbre no sirve y no quiero que el motorizado se vaya.',
     lastMessageTime: '2026-10-02T22:18:00Z',
     unreadCount: 2,
@@ -438,7 +438,7 @@ export const mockConversations: ConversationSummary[] = [
     id: 'conv-5',
     customerPhone: '+51 955 333 444',
     customerName: 'Sofía Castro',
-    status: 'resolved',
+    status: 'closed',
     lastMessageSnippet: '¡Muchas gracias por su atención! Deliciosas.',
     lastMessageTime: '2026-10-02T21:50:00Z',
     unreadCount: 0,
