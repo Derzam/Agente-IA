@@ -10,8 +10,16 @@ import { SettingsView } from '@/features/settings/SettingsView';
 import { MetricsView } from '@/features/metrics/MetricsView';
 import { orderService } from '@/services/orderService';
 import { conversationService } from '@/services/conversationService';
+import { SessionProvider, useSession } from '@/auth/SessionContext';
+import { BusinessProvider, useBusiness } from '@/auth/BusinessContext';
+import { LoginView } from '@/auth/LoginView';
+import { AlertCircle, LogOut } from 'lucide-react';
+import { Button } from '@/components/common/Button';
 
-export const App: React.FC = () => {
+const AdminLayout: React.FC = () => {
+  const { isAuthenticated, isLoading: isAuthLoading, signOut } = useSession();
+  const { isLoading: isBizLoading, error: bizError, refreshBusinessData } = useBusiness();
+
   const [activeView, setActiveView] = useState<NavItemKey>('dashboard');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isAcceptingOrders, setIsAcceptingOrders] = useState(true);
@@ -21,8 +29,10 @@ export const App: React.FC = () => {
   const [waitingChatsCount, setWaitingChatsCount] = useState(1);
 
   useEffect(() => {
-    refreshCounters();
-  }, [activeView]);
+    if (isAuthenticated) {
+      refreshCounters();
+    }
+  }, [activeView, isAuthenticated]);
 
   const refreshCounters = async () => {
     try {
@@ -53,9 +63,63 @@ export const App: React.FC = () => {
   };
 
   const handleNavigateToChatByPhone = (_phone: string) => {
-    // Look up conversation by phone or just open conversations
     setActiveView('conversations');
   };
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+        <div className="text-center space-y-3">
+          <div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-slate-300 text-sm font-medium">Verificando sesión segura...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginView />;
+  }
+
+  if (isBizLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="text-center space-y-3">
+          <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-slate-600 text-sm font-medium">Cargando negocios autorizados...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (bizError) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl p-6 border border-slate-200 shadow-xl text-center space-y-4">
+          <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full mx-auto flex items-center justify-center">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Acceso a Negocios Restringido</h2>
+            <p className="text-xs text-slate-500 mt-1">{bizError}</p>
+          </div>
+          <div className="flex gap-2 justify-center pt-2">
+            <Button variant="outline" size="sm" onClick={() => refreshBusinessData()}>
+              Reintentar
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => signOut()}
+              leftIcon={<LogOut className="w-4 h-4" />}
+            >
+              Cerrar Sesión
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -118,4 +182,15 @@ export const App: React.FC = () => {
     </div>
   );
 };
+
+export const App: React.FC = () => {
+  return (
+    <SessionProvider>
+      <BusinessProvider>
+        <AdminLayout />
+      </BusinessProvider>
+    </SessionProvider>
+  );
+};
+
 export default App;
