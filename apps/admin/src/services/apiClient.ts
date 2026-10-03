@@ -1,42 +1,52 @@
 /**
- * API Client Configuration
- * Prototype remains mock-first. Real requests follow the canonical Codex v0.1 contract.
+ * Unified API Client Interface
+ * Integrates real ApiClient with mock mode and idempotency helpers.
  */
 
-export const USE_MOCK_DATA = true;
+import { defaultApiClient, ApiClient } from '@/api/client';
+import { RequestOptions, NetworkError } from '@/api/types';
+
+export const USE_MOCK_DATA =
+  import.meta.env.VITE_USE_MOCK_DATA !== undefined
+    ? import.meta.env.VITE_USE_MOCK_DATA === 'true'
+    : true;
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || '/v1';
 export const BUSINESS_ID = import.meta.env.VITE_BUSINESS_ID || '';
 
-export async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData?.error?.message || `Request failed with status ${res.status}`);
-  }
-
-  const json = await res.json();
-  return json.data;
+export async function request<T>(endpoint: string, options?: RequestOptions): Promise<T> {
+  return defaultApiClient.request<T>(endpoint, options);
 }
 
-export async function businessRequest<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  if (!BUSINESS_ID) {
-    throw new Error('VITE_BUSINESS_ID is required when mock data is disabled.');
-  }
-  return request<T>(`/businesses/${BUSINESS_ID}${endpoint}`, options);
+export async function businessRequest<T>(endpoint: string, options?: RequestOptions): Promise<T> {
+  return defaultApiClient.businessRequest<T>(endpoint, options);
 }
 
+/**
+ * Generates a fresh Idempotency-Key for a new user intention.
+ */
 export function newIdempotencyKey(): string {
   return crypto.randomUUID();
 }
 
-export function realAdapterPending(area: string): never {
-  throw new Error(`Real API adapter for ${area} is pending Phase 2 contract projection work. Keep USE_MOCK_DATA enabled.`);
+/**
+ * Reuses the same idempotencyKey during network retries of the SAME user gesture.
+ * If a NetworkError occurs, the caller can retry with the identical key.
+ */
+export async function executeWithNetworkRetry<T>(
+  action: (idempotencyKey: string) => Promise<T>,
+  existingKey?: string
+): Promise<T> {
+  const key = existingKey || newIdempotencyKey();
+  try {
+    return await action(key);
+  } catch (err) {
+    if (err instanceof NetworkError) {
+      // Caller retains 'key' to safely retry without generating a duplicate intention
+      throw Object.assign(err, { retainedIdempotencyKey: key });
+    }
+    throw err;
+  }
 }
+
+export { defaultApiClient, ApiClient };
