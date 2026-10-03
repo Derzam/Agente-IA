@@ -43,7 +43,8 @@ export const MenuView: React.FC = () => {
   };
 
   const handleToggleStock = async (itemId: string, currentVal: boolean) => {
-    const updated = await menuService.toggleAvailability(itemId, !currentVal);
+    const target = items.find((i) => i.id === itemId);
+    const updated = await menuService.toggleAvailability(itemId, !currentVal, target?.version || 1);
     setItems((prev) => prev.map((item) => (item.id === itemId ? updated : item)));
   };
 

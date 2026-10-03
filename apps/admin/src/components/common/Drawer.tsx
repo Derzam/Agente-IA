@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useId } from 'react';
 import { X } from 'lucide-react';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 export interface DrawerProps {
   isOpen: boolean;
@@ -9,6 +10,7 @@ export interface DrawerProps {
   children: React.ReactNode;
   footer?: React.ReactNode;
   width?: 'md' | 'lg' | 'xl';
+  initialFocusRef?: React.RefObject<HTMLElement | null>;
 }
 
 export const Drawer: React.FC<DrawerProps> = ({
@@ -19,20 +21,23 @@ export const Drawer: React.FC<DrawerProps> = ({
   children,
   footer,
   width = 'lg',
+  initialFocusRef,
 }) => {
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
+  const titleId = useId();
+  const containerRef = useFocusTrap<HTMLDivElement>({
+    isOpen,
+    onClose,
+    initialFocusRef,
+  });
+
+  React.useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
-      window.addEventListener('keydown', handleKeyDown);
     }
     return () => {
       document.body.style.overflow = 'unset';
-      window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -53,15 +58,20 @@ export const Drawer: React.FC<DrawerProps> = ({
 
       {/* Drawer Panel */}
       <div
-        className={`relative w-full ${widthClasses[width]} bg-white shadow-2xl z-10 flex flex-col h-full transform transition-transform duration-300 ease-in-out`}
+        ref={containerRef}
+        tabIndex={-1}
+        className={`relative w-full ${widthClasses[width]} bg-white shadow-2xl z-10 flex flex-col h-full transform transition-transform duration-300 ease-in-out focus:outline-none`}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={titleId}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-white">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">{title}</h2>
-            {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
+            <h2 id={titleId} className="text-lg font-bold text-slate-900">
+              {title}
+            </h2>
+            {subtitle && <div className="text-xs text-slate-500 mt-0.5">{subtitle}</div>}
           </div>
           <button
             onClick={onClose}
@@ -76,7 +86,9 @@ export const Drawer: React.FC<DrawerProps> = ({
         <div className="p-5 sm:p-6 overflow-y-auto flex-1">{children}</div>
 
         {/* Footer */}
-        {footer && <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50">{footer}</div>}
+        {footer && (
+          <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50">{footer}</div>
+        )}
       </div>
     </div>
   );
