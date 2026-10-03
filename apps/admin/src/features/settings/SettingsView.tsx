@@ -13,7 +13,7 @@ import { Switch } from '@/components/common/Switch';
 import { Card, CardHeader, CardBody } from '@/components/common/Card';
 import { Tabs } from '@/components/common/Tabs';
 import { settingsService } from '@/services/settingsService';
-import { AgentConfig, BusinessSettings, DeliverySettings } from '@agente-ia/shared';
+import { AgentConfig, BusinessSettings, DeliverySettings } from '@/types/viewModels';
 
 export const SettingsView: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<'agent' | 'business' | 'delivery'>('agent');
