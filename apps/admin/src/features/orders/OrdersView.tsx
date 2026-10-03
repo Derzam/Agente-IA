@@ -18,7 +18,7 @@ import { Drawer } from '@/components/common/Drawer';
 import { Modal } from '@/components/common/Modal';
 import { EmptyState } from '@/components/common/EmptyState';
 import { orderService } from '@/services/orderService';
-import { Order, OrderStatus } from '@agente-ia/shared';
+import { Order, OrderStatus } from '@/types/viewModels';
 import { NavItemKey } from '@/components/layout/Sidebar';
 
 interface OrdersViewProps {
