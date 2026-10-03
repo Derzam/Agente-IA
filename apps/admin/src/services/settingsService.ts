@@ -111,7 +111,7 @@ export const settingsService = {
 
     const dtoSettings = await endpoints.getSettings(undefined, options);
     cachedSettingsVersion = dtoSettings.version;
-    return mapDtoToViewModelAgentConfig(dtoSettings, localAgentConfig);
+    return mapDtoToViewModelAgentConfig(dtoSettings);
   },
 
   async updateAgentConfig(
