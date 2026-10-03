@@ -1,8 +1,8 @@
 # Sistema de Diseño y Guía de Componentes — Panel Administrativo
 
-> **Versión:** 1.0.0 — Fase 1  
-> **Área:** UI/UX & Frontend Architecture  
-> **Estándar:** WCAG 2.1 Nivel AA  
+> **Versión:** 1.0.0 — Fase 1
+> **Área:** UI/UX & Frontend Architecture
+> **Estándar:** WCAG 2.1 Nivel AA
 > **Stack Base:** Tailwind CSS + Radix UI Primitives / Lucide Icons
 
 ---
