@@ -1,39 +1,60 @@
-import { ConversationSummary, ChatMessage } from '@/types/viewModels';
+import type { ConversationSummary, ChatMessage } from '@/types/viewModels';
+import type { HandoffReason, UUID } from '@agente-ia/shared';
 import { mockConversations, mockMessagesByConversation } from '@/mocks/mockData';
-import { USE_MOCK_DATA, request } from './apiClient';
+import { USE_MOCK_DATA, newIdempotencyKey } from './apiClient';
+import { endpoints } from '@/api/endpoints';
+import {
+  mapDtoConversationToViewModel,
+  mapDtoMessageToViewModel,
+} from '@/adapters/conversationAdapter';
+import type { RequestOptions } from '@/api/types';
 
 let localConversations: ConversationSummary[] = [...mockConversations];
 let localMessages: Record<string, ChatMessage[]> = { ...mockMessagesByConversation };
 
 export const conversationService = {
-  async getConversations(): Promise<ConversationSummary[]> {
+  async getConversations(
+    params?: { status?: string; limit?: number; cursor?: string },
+    options?: RequestOptions
+  ): Promise<ConversationSummary[]> {
     if (USE_MOCK_DATA) {
+      if (params?.status && params.status !== 'all') {
+        return Promise.resolve(localConversations.filter((c) => c.status === params.status));
+      }
       return Promise.resolve([...localConversations]);
     }
-    return request<ConversationSummary[]>('/conversations');
+
+    const dtoList = await endpoints.getConversations(params, undefined, options);
+    return dtoList.map((dto) => mapDtoConversationToViewModel(dto));
   },
 
-  async getMessages(conversationId: string): Promise<ChatMessage[]> {
+  async getMessages(conversationId: string, options?: RequestOptions): Promise<ChatMessage[]> {
     if (USE_MOCK_DATA) {
       return Promise.resolve([...(localMessages[conversationId] || [])]);
     }
-    return request<ChatMessage[]>(`/conversations/${conversationId}/messages`);
+
+    const dtoList = await endpoints.getMessages(conversationId, undefined, undefined, options);
+    return dtoList.map(mapDtoMessageToViewModel);
   },
 
   async sendMessage(
     conversationId: string,
-    content: string,
-    sender: 'staff' | 'customer' = 'staff',
-    isInternalNote = false
+    text: string,
+    expectedConversationVersion = 1,
+    isInternalNote = false,
+    idempotencyKey?: string,
+    options?: RequestOptions
   ): Promise<ChatMessage> {
+    const key = idempotencyKey || newIdempotencyKey();
+
     if (USE_MOCK_DATA) {
       const newMsg: ChatMessage = {
         id: `msg-${Date.now()}`,
         conversationId,
-        sender,
-        senderName: isInternalNote ? 'Nota de Staff' : 'Operador Carlos',
+        sender: 'staff',
+        senderName: isInternalNote ? 'Nota de Staff' : 'Operador en Turno',
         type: isInternalNote ? 'internal_note' : 'text',
-        content,
+        content: text,
         timestamp: new Date().toISOString(),
         isInternalNote,
       };
@@ -43,43 +64,169 @@ export const conversationService = {
       }
       localMessages[conversationId].push(newMsg);
 
-      // Update conversation snippet
       const convIndex = localConversations.findIndex((c) => c.id === conversationId);
       if (convIndex !== -1 && !isInternalNote) {
         localConversations[convIndex] = {
           ...localConversations[convIndex],
-          lastMessageSnippet: content,
+          lastMessageSnippet: text,
           lastMessageTime: newMsg.timestamp,
         };
       }
 
       return Promise.resolve(newMsg);
     }
-    return request<ChatMessage>(`/conversations/${conversationId}/messages`, {
-      method: 'POST',
-      body: JSON.stringify({ content, isInternalNote }),
-    });
+
+    // Call canonical POST /conversations/{id}/messages
+    await endpoints.sendMessage(
+      conversationId,
+      {
+        text,
+        expected_conversation_version: expectedConversationVersion,
+      },
+      key,
+      undefined,
+      options
+    );
+
+    // Return optimistic chat message presentation model
+    return {
+      id: `msg-${Date.now()}`,
+      conversationId,
+      sender: 'staff',
+      senderName: 'Operador',
+      type: 'text',
+      content: text,
+      timestamp: new Date().toISOString(),
+      isInternalNote,
+    };
   },
 
-  async takeoverConversation(conversationId: string, operatorName: string): Promise<ConversationSummary> {
+  /**
+   * Request human handoff via canonical POST /conversations/{id}/handoffs
+   */
+  async requestHandoff(
+    conversationId: string,
+    reason: HandoffReason = 'explicit_request',
+    expectedConversationVersion = 1,
+    context: string | null = null,
+    idempotencyKey?: string,
+    options?: RequestOptions
+  ) {
+    const key = idempotencyKey || newIdempotencyKey();
+
+    if (USE_MOCK_DATA) {
+      const index = localConversations.findIndex((c) => c.id === conversationId);
+      if (index !== -1) {
+        localConversations[index] = {
+          ...localConversations[index],
+          status: 'human_pending',
+          handoffRequestedAt: new Date().toISOString(),
+        };
+      }
+      return localConversations[index];
+    }
+
+    return endpoints.createHandoff(
+      conversationId,
+      {
+        reason,
+        context,
+        expected_conversation_version: expectedConversationVersion,
+      },
+      key,
+      undefined,
+      options
+    );
+  },
+
+  /**
+   * Claim human handoff via canonical POST /handoffs/{handoff_id}/claim
+   */
+  async claimHandoff(
+    handoffId: string,
+    assignedUserId: UUID,
+    expectedVersion = 1,
+    idempotencyKey?: string,
+    options?: RequestOptions
+  ) {
+    const key = idempotencyKey || newIdempotencyKey();
+    return endpoints.claimHandoff(
+      handoffId,
+      {
+        assigned_user_id: assignedUserId,
+        expected_version: expectedVersion,
+      },
+      key,
+      undefined,
+      options
+    );
+  },
+
+  /**
+   * Resolve human handoff via canonical POST /handoffs/{handoff_id}/resolve
+   */
+  async resolveHandoff(
+    handoffId: string,
+    action: 'resume_bot' | 'close',
+    resolution: string,
+    expectedVersion = 1,
+    idempotencyKey?: string,
+    options?: RequestOptions
+  ) {
+    const key = idempotencyKey || newIdempotencyKey();
+    return endpoints.resolveHandoff(
+      handoffId,
+      {
+        action,
+        resolution,
+        expected_version: expectedVersion,
+      },
+      key,
+      undefined,
+      options
+    );
+  },
+
+  /**
+   * UX Takeover Helper: maps UI button to canonical handoff claim or create+claim.
+   */
+  async takeoverConversation(
+    conversationId: string,
+    operatorUserId: UUID,
+    handoffId?: string,
+    expectedVersion = 1
+  ): Promise<ConversationSummary> {
     if (USE_MOCK_DATA) {
       const index = localConversations.findIndex((c) => c.id === conversationId);
       if (index === -1) throw new Error('Conversation not found');
       const updated: ConversationSummary = {
         ...localConversations[index],
         status: 'human_active',
-        assignedOperatorName: operatorName,
+        assignedOperatorName: 'Operador en Turno',
       };
       localConversations[index] = updated;
       return Promise.resolve(updated);
     }
-    return request<ConversationSummary>(`/conversations/${conversationId}/takeover`, {
-      method: 'POST',
-      body: JSON.stringify({ operatorName }),
-    });
+
+    let targetHandoffId = handoffId;
+    if (!targetHandoffId) {
+      const handoff = await this.requestHandoff(conversationId, 'explicit_request', expectedVersion);
+      targetHandoffId = handoff.id;
+    }
+
+    await this.claimHandoff(targetHandoffId, operatorUserId, expectedVersion);
+    const updatedConv = await endpoints.getConversationById(conversationId);
+    return mapDtoConversationToViewModel(updatedConv);
   },
 
-  async returnToBot(conversationId: string): Promise<ConversationSummary> {
+  /**
+   * UX Return-to-bot Helper: maps UI button to canonical handoff resolve with action: resume_bot.
+   */
+  async returnToBot(
+    conversationId: string,
+    handoffId?: string,
+    expectedVersion = 1
+  ): Promise<ConversationSummary> {
     if (USE_MOCK_DATA) {
       const index = localConversations.findIndex((c) => c.id === conversationId);
       if (index === -1) throw new Error('Conversation not found');
@@ -89,39 +236,19 @@ export const conversationService = {
         assignedOperatorName: undefined,
       };
       localConversations[index] = updated;
-
-      // Add bot reentry message
-      const botMsg: ChatMessage = {
-        id: `msg-${Date.now()}`,
-        conversationId,
-        sender: 'bot',
-        type: 'text',
-        content: '¡Listo! Nuestro asistente virtual ha retomado la conversación 🤖. ¿En qué más te puedo ayudar?',
-        timestamp: new Date().toISOString(),
-      };
-      if (!localMessages[conversationId]) localMessages[conversationId] = [];
-      localMessages[conversationId].push(botMsg);
-
       return Promise.resolve(updated);
     }
-    return request<ConversationSummary>(`/conversations/${conversationId}/return-to-bot`, {
-      method: 'POST',
-    });
-  },
 
-  async resolveConversation(conversationId: string): Promise<ConversationSummary> {
-    if (USE_MOCK_DATA) {
-      const index = localConversations.findIndex((c) => c.id === conversationId);
-      if (index === -1) throw new Error('Conversation not found');
-      const updated: ConversationSummary = {
-        ...localConversations[index],
-        status: 'closed',
-      };
-      localConversations[index] = updated;
-      return Promise.resolve(updated);
+    if (handoffId) {
+      await this.resolveHandoff(
+        handoffId,
+        'resume_bot',
+        'Atención humana finalizada. Retoma el asistente virtual.',
+        expectedVersion
+      );
     }
-    return request<ConversationSummary>(`/conversations/${conversationId}/resolve`, {
-      method: 'POST',
-    });
+
+    const updatedConv = await endpoints.getConversationById(conversationId);
+    return mapDtoConversationToViewModel(updatedConv);
   },
 };
