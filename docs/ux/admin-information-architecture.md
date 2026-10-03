@@ -1,7 +1,7 @@
 # Arquitectura de Información y Modelo de Usuarios — Panel Administrativo
 
-> **Versión:** 1.0.0 — Fase 1  
-> **Área:** UX/UI & Product Design  
+> **Versión:** 1.0.0 — Fase 1
+> **Área:** UX/UI & Product Design
 > **Proyecto:** Agente de IA para WhatsApp de Restaurante
 
 ---
