@@ -3,7 +3,7 @@ import type { OrderAction } from '@agente-ia/shared';
 import { mockOrders } from '@/mocks/mockData';
 import { USE_MOCK_DATA, newIdempotencyKey } from './apiClient';
 import { endpoints } from '@/api/endpoints';
-import { mapDtoOrderToViewModel } from '@/adapters/orderAdapter';
+import { mapDtoOrderToViewModel, mapDtoPaymentToViewModel } from '@/adapters/orderAdapter';
 import type { RequestOptions } from '@/api/types';
 
 let localOrders: Order[] = [...mockOrders];
@@ -117,12 +117,25 @@ export const orderService = {
   },
 
   /**
+   * Fetches payments associated with an order via GET /orders/{order_id}/payments.
+   */
+  async getOrderPayments(orderId: string, options?: RequestOptions): Promise<OrderPayment[]> {
+    if (USE_MOCK_DATA) {
+      const order = localOrders.find((o) => o.id === orderId);
+      return Promise.resolve(order?.payment ? [order.payment] : []);
+    }
+
+    const dtoList = await endpoints.getOrderPayments(orderId, undefined, options);
+    return dtoList.map(mapDtoPaymentToViewModel);
+  },
+
+  /**
    * Registers a manual cash payment via POST /orders/{id}/payments/cash-record.
-   * Strictly adheres to OpenAPI specification and requires expected_version and Idempotency-Key.
+   * Strictly adheres to OpenAPI specification and requires payment expected_version and Idempotency-Key.
    */
   async recordCashPayment(
     orderId: string,
-    expectedVersion: number,
+    expectedPaymentVersion?: number,
     note = 'Pago en efectivo recibido',
     paidAt?: string,
     idempotencyKey?: string,
@@ -146,7 +159,7 @@ export const orderService = {
         currency: current.currency || 'USD',
         paidAt: timestamp,
         notes: note,
-        version: (current.payment?.version || 1) + 1,
+        version: (current.payment?.version || expectedPaymentVersion || 1) + 1,
       };
 
       const updated: Order = {
@@ -161,10 +174,20 @@ export const orderService = {
       return Promise.resolve(updated);
     }
 
+    let versionToUse = expectedPaymentVersion;
+    if (versionToUse === undefined) {
+      const payments = await this.getOrderPayments(orderId, options);
+      const pendingPayment = payments.find((p) => p.status === 'pending');
+      if (!pendingPayment) {
+        throw new Error('No se encontró ningún cobro en efectivo pendiente para este pedido.');
+      }
+      versionToUse = pendingPayment.version ?? 1;
+    }
+
     await endpoints.recordCashPayment(
       orderId,
       {
-        expected_version: expectedVersion,
+        expected_version: versionToUse,
         note,
         paid_at: timestamp,
       },
