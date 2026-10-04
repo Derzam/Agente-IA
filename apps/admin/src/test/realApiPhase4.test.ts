@@ -10,8 +10,10 @@ import {
 } from '../api/types';
 import { newIdempotencyKey, executeWithNetworkRetry } from '../services/apiClient';
 import { getAvailableOrderActions, mapDtoPaymentToViewModel } from '../adapters/orderAdapter';
-import { mapDtoMessageToViewModel } from '../adapters/conversationAdapter';
+import { mapDtoMessageToViewModel, mapDtoConversationToViewModel } from '../adapters/conversationAdapter';
 import { settingsService } from '../services/settingsService';
+import { conversationService } from '../services/conversationService';
+import { shouldRunPolling } from '../hooks/usePolling';
 import type {
   Order as DTOOrder,
   Payment as DTOPayment,
@@ -436,6 +438,48 @@ describe('Phase 4 Real API Integration Suite', () => {
       }
     });
 
+
+    it('keeps conversation and handoff versions independent in the view model', () => {
+      const conversation = {
+        id: 'conv-versions',
+        business_id: 'biz-01',
+        customer_id: 'cust-01',
+        status: 'human_pending',
+        assigned_user_id: null,
+        last_customer_message_at: null,
+        expires_at: '2026-10-04T12:00:00Z',
+        automation_epoch: 3,
+        created_at: '2026-10-04T10:00:00Z',
+        updated_at: '2026-10-04T10:30:00Z',
+        version: 7,
+      } as any;
+      const handoff = {
+        id: 'handoff-versions',
+        business_id: 'biz-01',
+        conversation_id: 'conv-versions',
+        reason: 'explicit_request',
+        status: 'pending',
+        assigned_user_id: null,
+        resolved_at: null,
+        resolution: null,
+        created_at: '2026-10-04T10:31:00Z',
+        updated_at: '2026-10-04T10:31:00Z',
+        version: 2,
+      } as DTOHumanHandoff;
+
+      const vm = mapDtoConversationToViewModel(conversation, { handoff });
+      expect(vm.version).toBe(7);
+      expect(vm.handoffVersion).toBe(2);
+      expect(vm.handoffId).toBe('handoff-versions');
+      expect(vm.handoffStatus).toBe('pending');
+    });
+
+    it('refuses takeover without an authenticated operator identity', async () => {
+      await expect(
+        conversationService.takeoverConversation('conv-1', '' as any, 'handoff-1', 4, 2)
+      ).rejects.toThrow('Se requiere un usuario autenticado');
+    });
+
     it('endpoints.claimHandoff assigns operator and updates handoff status', async () => {
       const mockHandoff: DTOHumanHandoff = {
         id: 'handoff-01',
@@ -551,4 +595,18 @@ describe('Phase 4 Real API Integration Suite', () => {
       expect((settingsService as any).testAgentPrompt).toBeUndefined();
     });
   });
+
+  describe('10. Polling Focus Guard', () => {
+    it('does not run while the window is unfocused even if the document is visible', () => {
+      expect(shouldRunPolling(true, false, false, false)).toBe(false);
+    });
+
+    it('runs only when enabled, visible, focused and not already executing', () => {
+      expect(shouldRunPolling(true, false, true, false)).toBe(true);
+      expect(shouldRunPolling(false, false, true, false)).toBe(false);
+      expect(shouldRunPolling(true, true, true, false)).toBe(false);
+      expect(shouldRunPolling(true, false, true, true)).toBe(false);
+    });
+  });
+
 });
