@@ -1,7 +1,7 @@
 # Fase 3 — Antigravity: Panel administrativo con dominio completo y modificadores canónicos
 
-**Base:** `main` @ `6060d6b337707729cdebcc4f7200e10fd321b8e3`  
-**Rama:** `antigravity/phase-03-admin-domain`  
+**Base:** `main` @ `6060d6b337707729cdebcc4f7200e10fd321b8e3`
+**Rama:** `antigravity/phase-03-admin-domain`
 **PR Draft:** Hacia `main` (sin merge ni deploy a producción)
 
 ---
@@ -28,13 +28,15 @@ Producto (MenuItem)
 ### 2.2 Principios de diseño
 - **No mezclar precios:** El precio base del producto y los `price_delta_minor` de las opciones se mantienen estrictamente separados.
 - **Moneda canónica:** Se trabaja siempre en unidades menores enteras (`price_minor`, `price_delta_minor`). La UI formatea a moneda decimal para visualización (`$0.00`) sin usar floats como fuente de verdad en mutaciones.
-- **Edición jerárquica en UI:** 
+- **Edición jerárquica en UI:**
   - La edición se realiza en un flujo guiado: Producto → Modal/Sección de Grupos → Configuración de Opciones.
   - Se permite: agregar grupo, editar grupo, ordenar grupo, activar/desactivar grupo, agregar opción, editar opción, ordenar opción, activar/desactivar disponibilidad de opción.
-- **Resiliencia de adaptadores (`menuAdapter.ts`):**
-  - Si el backend envía `ProductOption[]` planos (`group_key`), el adaptador los agrupa automáticamente en `ModifierGroup[]` con sus respectivas opciones.
-  - Si se envían grupos jerárquicos directos, el adaptador los procesa de forma nativa.
-  - En mutaciones hacia la API existente, se adapta al contrato `POST /options`, `PATCH /options/{id}` o DTO de producto sin romper la compatibilidad mientras Codex concluye PR #8.
+- **Compatibilidad transitoria de adaptadores (`menuAdapter.ts`):**
+  - Mientras el contrato compartido continúe exponiendo `ProductOption[]` planos con `group_key`, el adaptador los agrupa en `ModifierGroup[]` para presentación.
+  - En modo real, crear/editar un producto sincroniza cada opción mediante `POST /products/{id}/options`, `PATCH /products/{id}/options/{option_id}` y `DELETE` para opciones eliminadas, y después vuelve a leer el producto desde la API.
+  - Nombre del grupo, required, min/max y disponibilidad de cada opción sí se persisten a través del contrato plano.
+  - El contrato plano todavía no representa de forma independiente `sort_order` ni `active` de un grupo. Por eso ordenar grupos y activar/desactivar un grupo completo quedan deshabilitados en modo real hasta que Codex publique el contrato jerárquico definitivo.
+  - Un grupo sin opciones no puede existir de manera persistente en el contrato plano; se considera una limitación temporal y no una entidad guardada.
 
 ---
 
@@ -138,4 +140,4 @@ La UI jamás recalcula ni sustituye los datos históricos usando los precios act
 ## 9. Compatibilidad y Modo Mock
 
 - Si `VITE_USE_MOCK_DATA=true`, el panel opera con mocks enriquecidos en memoria que reflejan con total fidelidad la jerarquía de grupos de modificadores, zonas de entrega, pagos en efectivo y transiciones canónicas.
-- Si `VITE_USE_MOCK_DATA=false`, el panel consume los endpoints `/v1` tenant-scoped asegurando encabezados `Authorization: Bearer <token>`, `Idempotency-Key`, y control de versión.
+- Si `VITE_USE_MOCK_DATA=false`, el panel consume los endpoints `/v1` tenant-scoped asegurando encabezados `Authorization: Bearer <token>`, `Idempotency-Key`, y control de versión. Las capacidades no representables por el contrato real vigente se muestran deshabilitadas, no se simulan como persistidas.
