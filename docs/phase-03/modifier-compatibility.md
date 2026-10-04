@@ -9,3 +9,7 @@ Proyección futura de lectura propuesta (requiere coordinación con Antigravity)
 Incompatibilidad de escritura a resolver antes de habilitar las rutas: el contrato antiguo permite cambiar required/min_select/max_select desde una opción y dispone de un solo expected_version. Ahora esos campos son compartidos por todo el grupo, que tiene su propia versión. No basta comparar version de la opción. Acordar DTOs/rutas de grupos y versiones independientes, o un comando transaccional de compatibilidad con control explícito de ambas versiones; nunca actualizar todos los grupos por group_key de texto ni aceptar cambios inconsistentes. También acordar creación de grupos vacíos, orden y borrado lógico.
 
 La coordinación queda documentada como siguiente trabajo, sin enviar mensajes a otros agentes ni modificar los contratos públicos. No bloquea el esquema persistente de esta fase.
+
+## Resolución posterior en Fase 4
+
+La incompatibilidad se cierra con rutas/DTOs jerárquicos y CAS independiente. La lectura legacy se deriva del modelo real y sus tres rutas se marcan deprecated, con rechazo de cambios a reglas compartidas. [Contrato de consumo para Antigravity](../phase-04/modifier-contract.md). El contenido anterior describe la entrega histórica de Fase 3.

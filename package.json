@@ -11,6 +11,8 @@
     "api:build": "npm run build --workspace=@agente-ia/api",
     "api:start": "npm run start --workspace=@agente-ia/api",
     "api:test": "npm run test --workspace=@agente-ia/api",
+    "worker:dev": "npm run worker:dev --workspace=@agente-ia/api",
+    "worker:start": "npm run worker:start --workspace=@agente-ia/api",
     "admin:dev": "npm run dev --workspace=@agente-ia/admin",
     "admin:build": "npm run build --workspace=@agente-ia/admin",
     "admin:test": "npm run test --workspace=@agente-ia/admin",

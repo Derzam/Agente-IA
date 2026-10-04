@@ -36,3 +36,7 @@ TTL claves panel propuesto 24h; si expira, invariantes permanentes de pedidos/pa
 Persistir propuesta de plan y slots con inbound ID antes de ejecutar herramientas; dedupe tool_call_id del proveedor solo no basta porque una generación repetida puede cambiar IDs. Un turno completado no se regenera al reenviar su webhook. Si cae tras ejecutar herramienta y antes de contestar, reconstruir desde resultados y estado, sin repetir comandos. IA no recibe claves de autorización/challenges. Nunca mantener lock durante llamada externa; CAS valida que carrito/conversación/epoch siguen vigentes al ejecutar.
 
 API/worker serializan comandos sobre agregados con lock y CAS. Handoff y envío compiten con epoch; un envío externo ya iniciado puede terminar tras la pausa, lo cual se registra y muestra. No prometer revocar un mensaje ya enviado. Cada job tiene cuotas/retries y dead letter con replay administrativo que reutiliza claves. Replays antiguos fuera de retención no se aceptan como mensajes nuevos.
+
+## Implementación de Fase 4
+
+Comandos panel, carrito, propuestas/confirmación, cash, handoffs y worker tienen persistencia, CAS/dedupe y replay implementados. Transporte Meta/OpenAI y slots de generación siguen fuera de ejecución. [Protocolo, autorización de replay y límites](../phase-04/implementation.md). El outbox usa clave estable event_type:aggregate_id:aggregate_version; causation_id se guarda aparte.

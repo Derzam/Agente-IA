@@ -14,7 +14,7 @@ async function main() {
     const readiness = async () => { await Promise.all([checkDatabaseRole(apiPool, 'api'), checkDatabaseRole(ingressPool, 'ingress')]); };
     await readiness(); // Reject superuser, bypass-RLS, owner or mixed-role credentials before listening.
     const app = await buildApp({ config, auth: new SupabaseJwtVerifier(config.supabaseUrl),
-      identities: new PostgresIdentityRepository(apiPool), inbox: new PostgresInboxRepository(ingressPool), readiness, close: closePools });
+      identities: new PostgresIdentityRepository(apiPool), inbox: new PostgresInboxRepository(ingressPool), domainPool:apiPool, readiness, close: closePools });
     const shutdown = async () => { await app.close(); };
     process.once('SIGINT', shutdown);
     process.once('SIGTERM', shutdown);

@@ -1,8 +1,8 @@
-# Contratos API v0.1.1 — estado parcial de fase 2
+# Contratos API v0.4.0 — Fase 4 operativa
 
-Especificación máquina: [openapi.json](openapi.json), OpenAPI 3.1. Tipos: [packages/shared](../../packages/shared/README.md). IMPLEMENTED: GET /v1/me, GET negocio, GET/POST webhook y GET health/ready; resto PLANNED. Backend local sin URL pública ni Supabase/Meta reales conectados. [Límites y ejecución](../phase-02/implementation.md), [extensión justificada](../phase-02/openapi-compatibility.md). Los ejemplos usan UUID ficticios y datos sintéticos.
+Especificación máquina: [openapi.json](openapi.json), OpenAPI 3.1; tipos shared. Las 49 operaciones están IMPLEMENTED en la rama de Fase 4; sin despliegue público. [Implementación y límites](../phase-04/implementation.md). Las etapas anteriores conservan su documentación histórica.
 
-Fase 3 amplía exclusivamente persistencia en Supabase staging: modifier_groups + modifier_options reemplazan el diseño SQL preliminar product_options. ProductOption y las rutas /options conservan su contrato público y permanecen PLANNED; no se conecta una proyección ficticia al panel. [Compatibilidad temporal y coordinación requerida](../phase-03/modifier-compatibility.md). OpenAPI y shared no cambian en esta fase.
+Fase 4 expone ModifierGroup/ModifierOption, rutas anidadas y versiones independientes; Product.modifier_groups permite grupos vacíos. ProductOption conserva un puente derivado de datos reales, deprecated y limitado a escrituras que no alteren reglas compartidas sin CAS del grupo. [Contrato para Antigravity](../phase-04/modifier-contract.md).
 
 ## Reglas comunes
 
@@ -35,6 +35,14 @@ La tabla y OpenAPI definen método, ruta, request y response. Los errores comune
 | POST /products/{product_id}/options | ProductOptionInput | 201 ProductOption | M/A;422 grupo incompatible |
 | PATCH /products/{product_id}/options/{option_id} | ProductOptionUpdate | 200 ProductOption | M/A;VERSION_CONFLICT |
 | DELETE /products/{product_id}/options/{option_id} | expected_version query | 204 | M/A;VERSION_CONFLICT |
+| GET /products/{product_id}/modifier-groups | cursor/limit | 200 ModifierGroupPage | O/M/A |
+| POST /products/{product_id}/modifier-groups | ModifierGroupInput | 201 ModifierGroupResponse | M/A |
+| PATCH /products/{product_id}/modifier-groups/{group_id} | ModifierGroupUpdate | 200 ModifierGroupResponse | M/A;CAS grupo |
+| DELETE /products/{product_id}/modifier-groups/{group_id} | expected_version query | 204 | M/A |
+| GET /products/{product_id}/modifier-groups/{group_id}/options | cursor/limit | 200 ModifierOptionPage | O/M/A |
+| POST /products/{product_id}/modifier-groups/{group_id}/options | ModifierOptionInput | 201 ModifierOptionResponse | M/A |
+| PATCH /products/{product_id}/modifier-groups/{group_id}/options/{option_id} | ModifierOptionUpdate | 200 ModifierOptionResponse | M/A;CAS opción |
+| DELETE /products/{product_id}/modifier-groups/{group_id}/options/{option_id} | expected_version query | 204 | M/A |
 | GET /delivery-zones | cursor/limit | 200 Page DeliveryZone | M/A |
 | POST /delivery-zones | DeliveryZoneInput | 201 DeliveryZone | M/A;422 polígono inválido |
 | PATCH /delivery-zones/{zone_id} | DeliveryZoneUpdate | 200 DeliveryZone | M/A;VERSION_CONFLICT |
