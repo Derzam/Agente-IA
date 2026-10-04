@@ -70,6 +70,13 @@ export function mapDtoToViewModelBusinessSettings(
     minOrder: minorToDecimal(settings.min_order_minor ?? 0),
     sessionTtlMinutes: settings.session_ttl_minutes ?? 60,
     aiEnabled: settings.ai_enabled ?? false,
+    taxPolicy: settings.tax_policy
+      ? {
+          mode: settings.tax_policy.mode,
+          rateBps: settings.tax_policy.rate_bps,
+          rounding: settings.tax_policy.rounding,
+        }
+      : null,
     hours: mapOpeningHoursToViewModel(settings.opening_hours),
   };
 }
@@ -139,6 +146,16 @@ export function buildSettingsUpdatePayload(
     update.ai_enabled = changes.aiEnabled;
   } else if (changes.ai_enabled !== undefined) {
     update.ai_enabled = changes.ai_enabled;
+  }
+
+  if (changes.taxPolicy !== undefined) {
+    update.tax_policy = changes.taxPolicy
+      ? {
+          mode: changes.taxPolicy.mode,
+          rate_bps: changes.taxPolicy.rateBps,
+          rounding: changes.taxPolicy.rounding,
+        }
+      : null;
   }
 
   if (changes.hours !== undefined) {
