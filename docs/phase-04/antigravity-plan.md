@@ -31,3 +31,16 @@ Cerrar el panel administrativo contra la API real implementada por Codex, elimin
 - Ninguna función no soportada se presenta como persistida.
 - Tests de adapters/services/UI y CI verdes.
 - Responsive y accesibilidad preservados.
+
+## Adopción del contrato final de Codex
+
+Antigravity adopta el contrato publicado por PR #12 sin copiar migraciones ni lógica backend:
+
+- `ModifierGroup` y `ModifierOption` son el contrato preferido en real mode.
+- La UI usa las rutas anidadas `/modifier-groups` y `/options` con versiones independientes.
+- El puente legacy `ProductOption.group_key` queda únicamente como fallback de lectura durante la separación temporal de ramas y podrá retirarse después de integrar PR #12.
+- Orden, estado activo, min/max y opciones se persisten mediante el contrato jerárquico real.
+- `BusinessSettings.tax_policy` se expone explícitamente como sin configurar, `none` con 0%, o `exclusive` con tasa explícita en puntos base.
+- La UI no infiere IVA ni ninguna tasa por país.
+- Una política fiscal ausente se muestra como bloqueo de cotización, no como 0% implícito.
+- OpenAI, Meta outbound y pagos electrónicos permanecen desactivados.
