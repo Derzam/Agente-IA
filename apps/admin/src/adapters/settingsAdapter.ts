@@ -9,11 +9,13 @@
  */
 
 import type {
-  BusinessSettings as DTOBusinessSettings,
   Business as DTOBusiness,
-  SettingsUpdate,
   OpeningInterval,
 } from '@agente-ia/shared';
+import type {
+  Phase4BusinessSettings as DTOBusinessSettings,
+  Phase4SettingsUpdate as SettingsUpdate,
+} from '@/api/endpoints';
 import type {
   BusinessSettings as ViewModelBusinessSettings,
   DeliverySettings as ViewModelDeliverySettings,
