@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   mapDtoProductOptionsToModifierGroups,
   mapDtoProductToViewModel,
@@ -7,7 +7,8 @@ import { mapDtoDeliveryZoneToViewModel } from '../adapters/deliveryZoneAdapter';
 import { mapDtoOrderToViewModel } from '../adapters/orderAdapter';
 import { deliveryZoneService } from '../services/deliveryZoneService';
 import { orderService } from '../services/orderService';
-import { menuService } from '../services/menuService';
+import { menuService, syncProductModifiers } from '../services/menuService';
+import { endpoints } from '../api/endpoints';
 import { VERSION_CONFLICT_MESSAGE } from '../api/types';
 import type {
   ProductOption as DTOProductOption,
@@ -18,6 +19,9 @@ import type {
 } from '@agente-ia/shared';
 
 describe('Phase 3 Domain Test Suite', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   describe('Canonical Modifiers Hierarchy (Product -> Groups -> Options)', () => {
     const mockDtoOptions: DTOProductOption[] = [
       {
@@ -142,6 +146,66 @@ describe('Phase 3 Domain Test Suite', () => {
       expect(vm.price).toBe(8.5);
       expect(vm.modifierGroups).toHaveLength(2);
       expect(vm.modifierGroups![0].options[1].priceDelta).toBe(2);
+    });
+  });
+
+  describe('Real API modifier persistence bridge', () => {
+    it('creates, updates and deletes ProductOption records for the hierarchical editor', async () => {
+      const current: DTOProductOption[] = [
+        {
+          id: 'existing-keep', product_id: 'prod-1', business_id: 'biz-1', version: 4,
+          created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z',
+          group_key: 'extras', name: 'Queso', price_delta_minor: 50,
+          required: false, min_select: 0, max_select: 2, available: true,
+        },
+        {
+          id: 'existing-remove', product_id: 'prod-1', business_id: 'biz-1', version: 2,
+          created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z',
+          group_key: 'extras', name: 'Tocino', price_delta_minor: 100,
+          required: false, min_select: 0, max_select: 2, available: true,
+        },
+      ];
+      const groups = [{
+        id: 'extras', name: 'Extras', required: false, minSelect: 0, maxSelect: 3,
+        minSelections: 0, maxSelections: 3, sortOrder: 1, active: true, version: 1,
+        options: [
+          { id: 'existing-keep', name: 'Queso extra', priceDeltaMinor: 75, priceDelta: 0.75, isAvailable: true, sortOrder: 1, version: 4 },
+          { id: 'temp-new', name: 'Huevo', priceDeltaMinor: 80, priceDelta: 0.8, isAvailable: true, sortOrder: 2, version: 1 },
+        ],
+      }];
+
+      const update = vi.spyOn(endpoints, 'updateProductOption').mockResolvedValue(current[0]);
+      const create = vi.spyOn(endpoints, 'createProductOption').mockResolvedValue(current[0]);
+      const remove = vi.spyOn(endpoints, 'deleteProductOption').mockResolvedValue(undefined as never);
+
+      await syncProductModifiers('prod-1', groups, current);
+
+      expect(update).toHaveBeenCalledTimes(1);
+      expect(update.mock.calls[0][0]).toBe('prod-1');
+      expect(update.mock.calls[0][1]).toBe('existing-keep');
+      expect(update.mock.calls[0][2]).toMatchObject({
+        group_key: 'extras', name: 'Queso extra', price_delta_minor: 75,
+        required: false, min_select: 0, max_select: 3, available: true,
+        expected_version: 4,
+      });
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(create.mock.calls[0][1]).toMatchObject({ group_key: 'extras', name: 'Huevo', price_delta_minor: 80 });
+      expect(remove).toHaveBeenCalledTimes(1);
+      expect(remove.mock.calls[0][1]).toBe('existing-remove');
+      expect(remove.mock.calls[0][2]).toBe(2);
+    });
+
+    it('maps an inactive transitional group to unavailable flat options', async () => {
+      const groups = [{
+        id: 'salsas', name: 'Salsas', required: false, minSelect: 0, maxSelect: 1,
+        minSelections: 0, maxSelections: 1, sortOrder: 1, active: false, version: 1,
+        options: [
+          { id: 'new-salsa', name: 'BBQ', priceDeltaMinor: 0, priceDelta: 0, isAvailable: true, sortOrder: 1, version: 1 },
+        ],
+      }];
+      const create = vi.spyOn(endpoints, 'createProductOption').mockResolvedValue({} as DTOProductOption);
+      await syncProductModifiers('prod-1', groups, []);
+      expect(create.mock.calls[0][1]).toMatchObject({ group_key: 'salsas', available: false });
     });
   });
 
