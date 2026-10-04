@@ -2,6 +2,7 @@ import type {
   Category as DTOCategory,
   Product as DTOProduct,
   ProductOption as DTOProductOption,
+  ProductOptionInput as DTOProductOptionInput,
 } from '@agente-ia/shared';
 import type {
   MenuItemCategory as ViewModelCategory,
@@ -23,6 +24,41 @@ export function mapDtoCategoryToViewModel(dto: DTOCategory): ViewModelCategory {
     sortOrder: dto.sort_order,
     isActive: dto.active,
   };
+}
+
+export function modifierGroupKey(group: ViewModelModifierGroup): string {
+  const normalized = group.name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return normalized || group.id || 'general';
+}
+
+export function mapModifierOptionToDtoInput(
+  group: ViewModelModifierGroup,
+  option: ViewModelModifierOption
+): DTOProductOptionInput {
+  return {
+    group_key: modifierGroupKey(group),
+    name: option.name.trim(),
+    price_delta_minor: option.priceDeltaMinor,
+    required: group.required,
+    min_select: group.minSelect,
+    max_select: group.maxSelect,
+    available: group.active && option.isAvailable,
+  };
+}
+
+export function flattenModifierGroupsForWrite(groups: ViewModelModifierGroup[] = []) {
+  return groups.flatMap((group) =>
+    group.options.map((option) => ({
+      clientOptionId: option.id,
+      input: mapModifierOptionToDtoInput(group, option),
+    }))
+  );
 }
 
 /**
@@ -66,7 +102,13 @@ export function mapDtoProductOptionsToModifierGroups(
     group.options.push(modifierOption);
   }
 
-  return Array.from(groupsMap.values());
+  return Array.from(groupsMap.values()).map((group) => ({
+    ...group,
+    // Transitional flat API has no group-level active flag. An inactive group is
+    // represented by all of its options being unavailable until the hierarchical
+    // ModifierGroup contract is exposed by the backend.
+    active: group.options.some((option) => option.isAvailable),
+  }));
 }
 
 /**
