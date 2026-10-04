@@ -187,7 +187,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
     }
 
     try {
-      await conversationService.requestHandoff(
+      const handoff = await conversationService.requestHandoff(
         selectedConvId,
         selectedReason,
         currentConv?.version || 1,
@@ -196,9 +196,9 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
       const updated = await conversationService.takeoverConversation(
         selectedConvId,
         operatorUserId,
-        undefined,
-        (currentConv?.version || 1) + 1,
-        undefined
+        handoff.id,
+        currentConv?.version || 1,
+        handoff.version
       );
       setConversations((prev) => prev.map((c) => (c.id === selectedConvId ? updated : c)));
       loadMessages(selectedConvId);
