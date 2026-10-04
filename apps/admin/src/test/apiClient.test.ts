@@ -114,7 +114,7 @@ describe('ApiClient Suite', () => {
       expect(err).toBeInstanceOf(VersionConflictError);
       expect(err.code).toBe('VERSION_CONFLICT');
       expect(err.message).toBe(
-        'Este registro cambió. Revisa la nueva información antes de volver a ejecutar la acción.'
+        'El registro cambió. Actualiza la información antes de continuar.'
       );
       expect(err.requestId).toBe('req-409');
     }

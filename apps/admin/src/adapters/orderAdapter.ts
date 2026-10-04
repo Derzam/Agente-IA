@@ -4,14 +4,34 @@ import type {
   OrderStatus,
   OrderAction,
   Role,
+  Payment as DTOPayment,
 } from '@agente-ia/shared';
 import type {
   Order as ViewModelOrder,
   OrderItem as ViewModelOrderItem,
+  OrderPayment as ViewModelOrderPayment,
   OrderDeliveryAddress,
   FulfillmentType,
 } from '@/types/viewModels';
 import { minorToDecimal } from './moneyAdapter';
+
+/**
+ * Maps DTO Payment to ViewModel OrderPayment.
+ */
+export function mapDtoPaymentToViewModel(dto: DTOPayment): ViewModelOrderPayment {
+  return {
+    id: dto.id,
+    orderId: dto.order_id,
+    method: dto.method,
+    status: dto.status,
+    amountMinor: dto.amount_minor,
+    amount: minorToDecimal(dto.amount_minor),
+    currency: dto.currency,
+    paidAt: dto.paid_at,
+    notes: (dto as unknown as { notes?: string | null }).notes || null,
+    version: dto.version,
+  };
+}
 
 /**
  * Maps DTO OrderItem to ViewModel OrderItem.
@@ -53,7 +73,16 @@ export function mapAddressSnapshotToViewModel(
  * Maps canonical DTO Order to presentation ViewModel Order.
  * Preserves backend version and authoritative totals.
  */
-export function mapDtoOrderToViewModel(dto: DTOOrder, customerLookup?: { name?: string; phone?: string }): ViewModelOrder {
+export function mapDtoOrderToViewModel(
+  dto: DTOOrder,
+  customerLookup?: { name?: string; phone?: string },
+  payment?: DTOPayment
+): ViewModelOrder {
+  const mappedPayment = payment
+    ? mapDtoPaymentToViewModel(payment)
+    : (dto as unknown as { payment?: DTOPayment }).payment
+    ? mapDtoPaymentToViewModel((dto as unknown as { payment: DTOPayment }).payment)
+    : undefined;
   return {
     id: dto.id,
     orderNumber: `#${dto.id.slice(0, 8).toUpperCase()}`,
@@ -65,10 +94,18 @@ export function mapDtoOrderToViewModel(dto: DTOOrder, customerLookup?: { name?: 
     fulfillmentType: dto.fulfillment as FulfillmentType,
     items: dto.items.map(mapDtoOrderItemToViewModel),
     subtotal: minorToDecimal(dto.subtotal_minor),
+    subtotalMinor: dto.subtotal_minor,
     deliveryFee: minorToDecimal(dto.delivery_minor),
+    deliveryMinor: dto.delivery_minor,
+    discount: minorToDecimal(dto.discount_minor),
+    discountMinor: dto.discount_minor,
     total: minorToDecimal(dto.total_minor),
-    paymentMethod: 'cash',
-    paymentStatus: dto.status === 'delivered' ? 'paid' : 'pending',
+    totalMinor: dto.total_minor,
+    currency: dto.currency,
+    paymentMethod: 'cash_on_delivery',
+    // Delivery completion never implies payment. Payment remains a separate aggregate.
+    paymentStatus: mappedPayment?.status || 'pending',
+    payment: mappedPayment,
     deliveryAddress: mapAddressSnapshotToViewModel(dto.address_snapshot),
     kitchenNotes: dto.items.map((i) => i.notes).filter(Boolean).join(' | ') || undefined,
     createdAt: dto.created_at,
