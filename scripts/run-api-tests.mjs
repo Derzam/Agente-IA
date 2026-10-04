@@ -44,7 +44,8 @@ try {
     console.log('PostgreSQL isolated temporary cluster started (loopback only).');
   }
   const testFiles=(await readdir(join(root,'apps/api/test'))).filter(name=>name.endsWith('.test.ts')).map(name=>join(root,'apps/api/test',name));
-  await run(process.execPath, ['--import','tsx','--test',...testFiles], { ...process.env, TEST_DATABASE_URL:testUrl });
+  // DB suites use separate databases but capability roles belong to the cluster.
+  await run(process.execPath, ['--import','tsx','--test','--test-concurrency=1',...testFiles], { ...process.env, TEST_DATABASE_URL:testUrl });
 } catch (error) {
   // URLs and child stderr may contain credentials; emit only a safe diagnostic.
   console.error(error?.message?.startsWith('Subprocess failed') ? error.message : 'Tests could not start. Set PG_BIN or a disposable loopback TEST_DATABASE_URL ending in _test.');
