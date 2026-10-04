@@ -76,3 +76,7 @@ git diff --check
 ```
 
 Estos comandos revisan especificaciones y consistencia documental; no son pruebas del backend ni de integraciones. El plan de pruebas de fase 2 está en [observabilidad y pruebas](docs/architecture/operations-and-tests.md).
+
+### Fase 4 en PR Draft #12
+
+[API operativa, servicios y worker interno](docs/phase-04/implementation.md), [contrato de modificadores para Antigravity](docs/phase-04/modifier-contract.md) y [evidencia staging](docs/phase-04/staging-validation.md). No hay deploy público ni activación OpenAI/Meta outbound.

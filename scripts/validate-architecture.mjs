@@ -8,7 +8,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const read = p => readFileSync(resolve(root,p),'utf8');
 const doc = JSON.parse(read('docs/api/openapi.json'));
 assert.equal(doc.openapi,'3.1.0');
-assert.match(doc.info.description,/NO IMPLEMENTADA/);
+assert.match(doc.info.description,/Fase 4/);
 assert.equal(doc.servers,undefined,'No declarar un servidor ficticio operativo');
 function walk(value) {
   if (!value || typeof value !== 'object') return;
@@ -47,8 +47,8 @@ for (const [path,item] of Object.entries(doc.paths)) {
     }
   }
 }
-assert.equal(operations,41,'39 operaciones originales + health/readiness documentados en fase 2');
-assert.equal(Object.values(doc.paths).flatMap(item=>Object.values(item)).filter(op=>op['x-implementation-status']==='IMPLEMENTED').length,6);
+assert.equal(operations,49,'41 anteriores + 8 rutas jerárquicas de modificadores');
+assert.equal(Object.values(doc.paths).flatMap(item=>Object.values(item)).filter(op=>op['x-implementation-status']==='IMPLEMENTED').length,49);
 const ts = read('packages/shared/src/index.ts');
 for (const name of ['Role','OrderStatus','OrderAction','ConversationStatus','HandoffReason','ErrorCode','DomainEventType']) {
   const declaration = ts.match(new RegExp(`export type ${name} = ([^;]+);`));

@@ -1,4 +1,4 @@
-// Artefacto de diseño; no registra rutas ni ejecuta integraciones.
+// Single source for published and runtime HTTP validation contracts; no provider calls.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 const target = fileURLToPath(new URL('../docs/api/openapi.json', import.meta.url));
@@ -36,7 +36,11 @@ S.Category = object({ ...entity, ...categoryInput });
 const optionInput = { group_key: str(), name: { ...str(), minLength: 1 }, price_delta_minor: money, required: bool, min_select: integer, max_select: integer, available: bool };
 S.ProductOption = object({ ...entity, product_id: uuid, ...optionInput });
 const productInput = { category_id: uuid, name: { ...str(), minLength: 1 }, description: nullable(text), price_minor: money, currency, available: bool, image_url: nullable({ type: 'string', format: 'uri', pattern: '^https://', maxLength: 2048 }) };
-S.Product = object({ ...entity, ...productInput, options: arr(ref('ProductOption'), 100) });
+const groupInput={name:{...str(),minLength:1},required:bool,min_select:{...integer,maximum:99},max_select:{...integer,maximum:99},sort_order:{...integer,maximum:100000},active:bool};
+const modifierInput={name:{...str(),minLength:1},price_delta_minor:money,available:bool,sort_order:{...integer,maximum:100000}};
+S.ModifierGroup=object({...entity,product_id:uuid,...groupInput});
+S.ModifierOption=object({...entity,modifier_group_id:uuid,...modifierInput});
+S.Product=object({...entity,...productInput,options:arr(ref('ProductOption'),100),modifier_groups:arr(object({...S.ModifierGroup.properties,options:arr(ref('ModifierOption'),99)}),99)},[...Object.keys(entity),...Object.keys(productInput),'options']);
 S.Customer = object({ ...entity, display_name: nullable(str()), phone_masked: nullable(str(30)) });
 const address = { address_text: str(1000), latitude: lat, longitude: lon, instructions: nullable(str(1000)) };
 S.AddressSnapshot = object(address);
@@ -52,7 +56,9 @@ S.Message = object({ ...entity, conversation_id: uuid, direction: en('inbound ou
 S.HumanHandoff = object({ ...entity, conversation_id: uuid, reason: ref('HandoffReason'), status: en('pending active resolved'), assigned_user_id: nullable(uuid), resolved_at: nullable(date), resolution: nullable(str(1000)) });
 S.OpeningInterval = object({ day: { type: 'integer', minimum: 0, maximum: 6, description: '0 domingo; intervalos mismo día, dividir cruces de medianoche.' }, opens_at: { type: 'string', pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }, closes_at: { type: 'string', pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' } });
 const settingsInput = { opening_hours: arr(ref('OpeningInterval'), 28), accepting_orders: bool, delivery_enabled: bool, pickup_enabled: bool, min_order_minor: money, session_ttl_minutes: { type: 'integer', minimum: 15, maximum: 1440 }, ai_enabled: bool };
-S.BusinessSettings = object({ business_id: uuid, version, created_at: date, updated_at: date, ...settingsInput });
+S.TaxPolicy=object({mode:en('none exclusive'),rate_bps:{...integer,maximum:10000},rounding:en('per_line_half_up')});
+settingsInput.tax_policy=nullable(ref('TaxPolicy'));
+S.BusinessSettings=object({business_id:uuid,version,created_at:date,updated_at:date,...settingsInput},['business_id','version','created_at','updated_at',...Object.keys(settingsInput).filter(k=>k!=='tax_policy')]);
 const polygon = object({ type: en('Polygon'), coordinates: arr({ type: 'array', minItems: 4, items: { type: 'array', minItems: 2, maxItems: 2, items: { type: 'number' } } }, 20) });
 const zoneInput = { name: str(), polygon_geojson: polygon, fee_minor: money, min_order_minor: money, priority: integer, active: bool };
 S.DeliveryZone = object({ ...entity, ...zoneInput });
@@ -60,7 +66,7 @@ S.Metrics = object({ from: date, to: date, orders_confirmed: integer, orders_can
 S.Membership = object({ business_id: uuid, role: ref('Role') });
 S.Me = object({ user_id: uuid, memberships: arr(ref('Membership')) });
 S.Money = object({ amount_minor: money, currency });
-for (const [name, props] of Object.entries({ CategoryInput: categoryInput, ProductInput: productInput, ProductOptionInput: optionInput, DeliveryZoneInput: zoneInput })) {
+for (const [name, props] of Object.entries({ ModifierGroupInput: groupInput, ModifierOptionInput: modifierInput, CategoryInput: categoryInput, ProductInput: productInput, ProductOptionInput: optionInput, DeliveryZoneInput: zoneInput })) {
   S[name] = object(props);
   S[name.replace('Input', 'Update')] = { ...object({ ...props, expected_version: version }, ['expected_version']), minProperties: 2 };
 }
@@ -75,7 +81,7 @@ S.MessageReceipt = object({ outbox_id: uuid, status: en('queued') });
 S.PaymentRecordInput = object({ paid_at: date, note: { ...str(1000), minLength: 1 }, expected_version: version });
 S.DomainEventType = en('order.created order.status_changed conversation.updated message.received message.delivery_updated handoff.created handoff.resolved');
 S.DomainEvent = object({ event_id: uuid, business_id: uuid, type: ref('DomainEventType'), resource_id: uuid, resource_version: version, occurred_at: date, request_id: uuid });
-for (const name of ['Business','Category','Product','ProductOption','Customer','Order','Payment','Conversation','Message','HumanHandoff','BusinessSettings','DeliveryZone','Metrics','Me','MessageReceipt']) {
+for (const name of ['ModifierGroup','ModifierOption','Business','Category','Product','ProductOption','Customer','Order','Payment','Conversation','Message','HumanHandoff','BusinessSettings','DeliveryZone','Metrics','Me','MessageReceipt']) {
   S[`${name}Response`] = object({ data: ref(name), meta: ref('Meta') });
   S[`${name}Page`] = object({ data: arr(ref(name)), meta: ref('Meta'), pagination: ref('Pagination') });
 }
@@ -106,8 +112,8 @@ function operation(method, suffix, summary, schema, options = {}) {
   count++;
   const paginationDescription = options.page ? (suffix === '/categories' ? ' Lista ordenada sort_order ASC,id ASC; cursor ligado al orden y tenant.' : ' Lista ordenada created_at DESC,id DESC; cursor ligado a filtros y tenant.') : '';
   const op = { operationId: `${method}_${path.replace(/[{}]/g,'').replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_/, '')}`, summary, description: 'PROPUESTA NO IMPLEMENTADA. Autorización y validación de negocio adicionales en docs/api/contracts.md.' + paginationDescription, tags: [options.tag || suffix.split('/')[1] || 'business'], security: [{ supabaseBearer: [] }], 'x-roles': options.roles || ['owner','manager','operator'], parameters, responses };
-  op['x-implementation-status'] = method === 'get' && (path === '/v1/me' || path === base) ? 'IMPLEMENTED' : 'PLANNED';
-  if (op['x-implementation-status'] === 'IMPLEMENTED') op.description = 'IMPLEMENTED en fase 2, sin despliegue. Autorización y validación en docs/api/contracts.md.';
+  op['x-implementation-status']='IMPLEMENTED';
+  if (op['x-implementation-status'] === 'IMPLEMENTED') op.description = 'IMPLEMENTED en fase 4; sin despliegue público. Autorización y validación en docs/api/contracts.md.' + paginationDescription;
   if (options.body) op.requestBody = { required:true, content:content(ref(options.body)) };
   if (mutating) responses[code].headers = { 'Idempotency-Replayed': { description:'true si se devolvió resultado persistido de mismo actor/comando.', schema:bool } };
   (paths[path] ||= {})[method] = op;
@@ -130,6 +136,9 @@ operation('get','/products/{product_id}','Detalle de producto','ProductResponse'
 operation('post','/products/{product_id}/options','Crear opción','ProductOptionResponse',{body:'ProductOptionInput',roles:management});
 operation('patch','/products/{product_id}/options/{option_id}','Actualizar opción','ProductOptionResponse',{body:'ProductOptionUpdate',roles:management});
 operation('delete','/products/{product_id}/options/{option_id}','Eliminar opción',null,{roles:management});
+crud('products/{product_id}/modifier-groups','ModifierGroup','group_id');
+crud('products/{product_id}/modifier-groups/{group_id}/options','ModifierOption','option_id');
+for(const path of Object.keys(paths).filter(p=>p.includes('/products/')&&p.includes('/options'))){for(const op of Object.values(paths[path]))if(!path.includes('/modifier-groups/'))op.deprecated=true;}
 crud('delivery-zones','DeliveryZone','zone_id',{},management);
 operation('get','/orders','Listar pedidos','OrderPage',{page:true,filters:{status:ref('OrderStatus'),customer_id:uuid}});
 operation('get','/orders/{order_id}','Detalle pedido','OrderResponse');
@@ -165,9 +174,12 @@ for (const [path,status] of [['/health','ok'],['/ready','ready']]) {
       '500':{$ref:'#/components/responses/Error500'}
     }}};
 }
-const doc = { openapi:'3.1.0',info:{title:'Agente-IA — contrato canónico',version:'0.1.1',description:'Fase 2: 6 operaciones IMPLEMENTED sin despliegue; resto PLANNED (NO IMPLEMENTADA). Ver docs/phase-02/implementation.md y x-implementation-status.'},paths,components:{securitySchemes:{supabaseBearer:{type:'http',scheme:'bearer',bearerFormat:'JWT'}},responses:errorResponses,schemas:S} };
+const doc = { openapi:'3.1.0',info:{title:'Agente-IA — contrato canónico',version:'0.4.0',description:'Fase 4: API operativa interna IMPLEMENTED; sin despliegue público ni OpenAI ni Meta outbound.'},paths,components:{securitySchemes:{supabaseBearer:{type:'http',scheme:'bearer',bearerFormat:'JWT'}},responses:errorResponses,schemas:S} };
 const serialized = JSON.stringify(doc,null,2) + '\n';
+const runtime=fileURLToPath(new URL('../apps/api/src/generated/contract.ts',import.meta.url));
+const runtimeText='// Generated by scripts/build-openapi.mjs. Do not edit.\nexport default '+JSON.stringify(doc)+';\n';
+if(process.argv.includes('--check')){if(readFileSync(runtime,'utf8')!==runtimeText)throw Error('Runtime contract drift');}else{writeFileSync(runtime,runtimeText);}
 if (process.argv.includes('--check')) {
   if (readFileSync(target,'utf8') !== serialized) throw new Error('OpenAPI difiere del generador; ejecutar node scripts/build-openapi.mjs');
-  console.log(`OpenAPI consistente: ${count + 4} operaciones canónicas (6 IMPLEMENTED).`);
+  console.log(`OpenAPI consistente: ${count + 4} operaciones canónicas (todas IMPLEMENTED).`);
 } else { writeFileSync(target,serialized); console.log(`Escrito ${target}`); }
