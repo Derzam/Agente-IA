@@ -26,6 +26,7 @@ import {
 } from '@/types/viewModels';
 import { decimalToMinor } from '@/adapters/moneyAdapter';
 import { VersionConflictError } from '@/api/types';
+import { USE_MOCK_DATA } from '@/services/apiClient';
 
 export const MenuView: React.FC = () => {
   const [categories, setCategories] = useState<MenuItemCategory[]>([]);
@@ -884,18 +885,18 @@ export const MenuView: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleReorderGroup(group.id, 'up')}
-                              disabled={groupIdx === 0}
+                              disabled={!USE_MOCK_DATA || groupIdx === 0}
                               className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30"
-                              title="Subir"
+                              title={USE_MOCK_DATA ? 'Subir' : 'Orden de grupos pendiente del contrato jerárquico del backend'}
                             >
                               <ArrowUp className="w-3.5 h-3.5" />
                             </button>
                             <button
                               type="button"
                               onClick={() => handleReorderGroup(group.id, 'down')}
-                              disabled={groupIdx === (editingItem.modifierGroups?.length || 1) - 1}
+                              disabled={!USE_MOCK_DATA || groupIdx === (editingItem.modifierGroups?.length || 1) - 1}
                               className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30"
-                              title="Bajar"
+                              title={USE_MOCK_DATA ? 'Bajar' : 'Orden de grupos pendiente del contrato jerárquico del backend'}
                             >
                               <ArrowDown className="w-3.5 h-3.5" />
                             </button>
@@ -903,6 +904,7 @@ export const MenuView: React.FC = () => {
                             <Switch
                               checked={group.active}
                               onChange={(act) => handleToggleGroupActive(group.id, act)}
+                              disabled={!USE_MOCK_DATA}
                               size="sm"
                             />
 
