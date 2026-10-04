@@ -536,7 +536,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
                 <div className="flex items-center gap-2 min-w-0">
                   <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" aria-hidden="true" />
                   <span className="truncate">
-                    <strong>Atención requerida:</strong> Automatización de IA suspendida. El operador debe tomar el control. Los mensajes automáticos no continuarán.
+                    <strong>Automatización suspendida. Pendiente de atención humana.</strong> Los mensajes de IA no continuarán hasta que el operador tome el control.
                   </span>
                 </div>
                 <Button
@@ -559,7 +559,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
                 <div className="flex items-center gap-2 min-w-0">
                   <UserCheck className="w-4 h-4 text-purple-600 shrink-0" aria-hidden="true" />
                   <span className="truncate">
-                    <strong>Atención humana activa:</strong> Automatización de IA suspendida. El operador controla la conversación.
+                    <strong>Conversación bajo control humano.</strong> Automatización de IA suspendida; el operador controla la conversación.
                   </span>
                 </div>
                 <Button

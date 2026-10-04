@@ -21,12 +21,12 @@ Se implementó el ciclo de vida completo de 9 estados en `ChatMessage.deliverySt
 | `queued` | **Encolado** | Aceptado por API (HTTP 202) y persistido en tabla outbox transaccional. Pendiente de toma por el worker. |
 | `pending` | **Pendiente** | En proceso de preparación interna por el despachador. |
 | `sending` | **Enviando** | Despachado hacia la API de WhatsApp Cloud / Graph API de Meta; esperando ACK inicial. |
-| `sent` | **Enviado** | Confirmado por el upstream de Meta con `wamid` oficial. |
+| `sent` | **Enviado al proveedor** | Confirmado por el upstream de Meta con `wamid` oficial. |
 | `delivered` | **Entregado** | Confirmado recibido en el dispositivo del cliente (doble check gris). |
 | `read` | **Leído** | Confirmado visto/abierto por el cliente en WhatsApp (doble check azul). |
-| `failed` | **Error de envío** | Rechazado o fallido con código de error saneado (ej. `WINDOW_CLOSED`, `RATE_LIMITED`). |
+| `failed` | **Falló el envío** | Rechazado o fallido con código de error saneado (ej. `WINDOW_CLOSED`, `RATE_LIMITED`). |
 | `unknown` | **Estado por confirmar** | Estado de entrega no reportado aún o ambiguo. Nunca se oculta como éxito ni fallo. |
-| `dead_letter` | **No entregable** | Agotados todos los reintentos automáticos del worker o retenido en cola de mensajes no procesables. |
+| `dead_letter` | **Requiere revisión** | Agotados todos los reintentos automáticos del worker o retenido en cola de mensajes no procesables. |
 
 ---
 
@@ -44,8 +44,8 @@ El adaptador `conversationAdapter.ts` incorpora la función `sanitizeFailureCode
 ## 4. Prioridad Incondicional de Handoff Humano
 
 Cuando una conversación entra en estado de atención humana:
-- **`human_pending`**: Se muestra un banner advertencia informando que la conversación requiere la asignación de un operador humano. La automatización del bot y los agentes de IA se suspenden automáticamente.
-- **`human_active`**: Se muestra un banner de control indicando el operador a cargo. Se suspende la generación de mensajes por IA.
+- **`human_pending`**: Se muestra un banner advertencia con la leyenda oficial: *"Automatización suspendida. Pendiente de atención humana."* Los mensajes automáticos de IA se suspenden automáticamente.
+- **`human_active`**: Se muestra un banner de control indicando: *"Conversación bajo control humano."* Se suspende la generación de mensajes por IA.
 - **Sin Bypass**: La interfaz no ofrece ningún botón para "forzar IA" o eludir el handoff mientras la conversación esté bajo atención humana.
 
 ---
@@ -108,3 +108,21 @@ El hook `usePolling` y la vista `ConversationsView` garantizan:
 
 - **Política Fiscal**: Se admite exclusivamente `unconfigured`, `none` (0%), y `exclusive` (tasa configurada explícitamente por el negocio). Si la política no está configurada, se bloquea la cotización y se advierte al operador. No existen presets fiscales hardcodeados.
 - **Métodos de Pago**: Se restringe rigurosamente a `cash_on_delivery`. No se expone ningún medio de pago electrónico (Stripe, PayPal, Deuna, etc.).
+
+---
+
+## 11. Presupuesto Agotado y Ventana de WhatsApp
+
+- **`AI_BUDGET_EXCEEDED` / `BUDGET_EXCEEDED`**: Se notifica claramente al operador: *"Presupuesto de automatización agotado. Se alcanzó el límite configurado de automatización para esta conversación o negocio."* No se ejecutan reintentos automáticos ni ráfagas de polling.
+- **`WINDOW_CLOSED`**: Se despliega aviso informativo indicando que han transcurrido más de 24 horas desde el último mensaje del cliente y que la política de WhatsApp Cloud restringe el envío libre de mensajes fuera de la ventana.
+
+---
+
+## 12. Panel Principal (Dashboard) Operativo y Honesto
+
+- Se erradicó por completo el widget simulado previo (*"Asistente Virtual Max"*, tasa ficticia de *84%*, *"Configurar Tono"*).
+- En su lugar, se integró el bloque **Operación & Runtime (Fase 5 Staging)** que expone métricas y estados verificados exclusivamente por backend:
+  - Estado del canal WhatsApp Sandbox con verificación HMAC y outbox activo.
+  - Orquestador de inferencia OpenAI Responses API.
+  - Conteo de conversaciones en espera humana pendientes (`human_pending`) extraído de la colección autoritativa.
+  - Claridad de infraestructura: *"Sin hosting de producción / Entorno staging"*.

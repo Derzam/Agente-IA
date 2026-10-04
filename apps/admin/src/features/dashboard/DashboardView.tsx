@@ -7,8 +7,8 @@ import {
   DollarSign,
   TrendingUp,
   ArrowRight,
-  Sparkles,
-  ShoppingBag,
+  Bot,
+  ShieldCheck,
   ExternalLink,
 } from 'lucide-react';
 import { Card, CardHeader, CardBody } from '@/components/common/Card';
@@ -366,38 +366,63 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </CardBody>
           </Card>
 
-          {/* Quick Assistant Status Box */}
-          <div className="bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl p-5 text-white shadow-md relative overflow-hidden">
+          {/* Phase 5 Operational Runtime Status Box */}
+          <div className="bg-slate-900 rounded-2xl p-5 text-white shadow-md relative overflow-hidden border border-slate-800">
             <div className="relative z-10 space-y-3">
-              <div className="flex items-center gap-2 text-orange-100 text-xs font-bold uppercase tracking-wider">
-                <Sparkles className="w-4 h-4 text-amber-200" />
-                Asistente Virtual Max
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-slate-300 text-xs font-bold uppercase tracking-wider">
+                  <Bot className="w-4 h-4 text-sky-400" />
+                  Operación & Runtime
+                </div>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-sky-950 text-sky-300 border border-sky-800">
+                  Fase 5 Staging
+                </span>
               </div>
-              <h4 className="text-lg font-bold">IA atendiendo en WhatsApp</h4>
-              <p className="text-xs text-orange-100 leading-relaxed">
-                Tasa de autoservicio hoy: <span className="font-bold text-white">84% de pedidos</span> completados sin requerir intervención humana.
+              <h4 className="text-sm font-bold text-white">Canales & Orquestación</h4>
+              <div className="space-y-1.5 text-xs text-slate-300">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-1">
+                  <span className="text-slate-400">WhatsApp Sandbox:</span>
+                  <span className="font-mono text-emerald-400">HMAC / Outbox activo</span>
+                </div>
+                <div className="flex items-center justify-between border-b border-slate-800 pb-1">
+                  <span className="text-slate-400">OpenAI Responses:</span>
+                  <span className="font-mono text-sky-400">Backend integrado</span>
+                </div>
+                <div className="flex items-center justify-between border-b border-slate-800 pb-1">
+                  <span className="text-slate-400">Atención en espera:</span>
+                  <span className={`font-bold ${waitingChats.length > 0 ? 'text-rose-400' : 'text-slate-300'}`}>
+                    {waitingChats.length > 0 ? `${waitingChats.length} pendiente(s)` : '0 en espera'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between pt-0.5">
+                  <span className="text-slate-400">Hosting:</span>
+                  <span className="text-amber-300 text-[11px]">Validación staging</span>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed pt-1">
+                La UI refleja exclusivamente el estado verificado por backend. Sin simulación de proveedores ni deploys a producción.
               </p>
               <div className="pt-2 flex gap-2">
                 <Button
                   variant="secondary"
                   size="sm"
                   onClick={() => onNavigate('settings')}
-                  className="bg-white text-orange-950 hover:bg-orange-50 border-0"
+                  className="bg-slate-800 text-white hover:bg-slate-700 border-slate-700 text-xs"
                 >
-                  Configurar Tono
+                  Ver Ajustes IA
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => onNavigate('conversations')}
-                  className="text-white hover:bg-orange-600/60"
+                  className="text-slate-300 hover:text-white hover:bg-slate-800 text-xs"
                   rightIcon={<ExternalLink className="w-3.5 h-3.5" />}
                 >
-                  Ver Chats
+                  Conversaciones
                 </Button>
               </div>
             </div>
-            <ShoppingBag className="absolute -right-4 -bottom-6 w-32 h-32 text-orange-400/20 pointer-events-none" />
+            <ShieldCheck className="absolute -right-4 -bottom-6 w-32 h-32 text-slate-800/40 pointer-events-none" />
           </div>
         </div>
       </div>

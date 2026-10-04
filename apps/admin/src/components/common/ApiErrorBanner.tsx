@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, RefreshCw, WifiOff, ShieldAlert, ServerCrash, Gauge, ZapOff } from 'lucide-react';
+import { AlertCircle, RefreshCw, WifiOff, ShieldAlert, ServerCrash, Gauge, ZapOff, Clock } from 'lucide-react';
 import { NormalizedApiError, NetworkError, TimeoutError, AuthError } from '@/api/types';
 import { Button } from './Button';
 
@@ -60,6 +60,16 @@ export const ApiErrorBanner: React.FC<ApiErrorBannerProps> = ({ error, onRetry, 
       message = error.message || 'El circuito de protección del proveedor está abierto. No se realizarán reintentos continuos.';
       icon = <ZapOff className="w-5 h-5 text-purple-600 shrink-0" aria-hidden="true" />;
       bannerColor = 'bg-purple-50 border-purple-300 text-purple-950';
+    } else if ((error.code as string) === 'AI_BUDGET_EXCEEDED' || (error.code as string) === 'BUDGET_EXCEEDED') {
+      title = 'Presupuesto de automatización agotado';
+      message = error.message || 'Se alcanzó el límite configurado de automatización para esta conversación o negocio.';
+      icon = <Gauge className="w-5 h-5 text-amber-600 shrink-0" aria-hidden="true" />;
+      bannerColor = 'bg-amber-50 border-amber-300 text-amber-950';
+    } else if (error.code === 'WINDOW_CLOSED') {
+      title = 'Ventana de WhatsApp cerrada (24h)';
+      message = error.message || 'Han transcurrido más de 24 horas desde el último mensaje del cliente. La política de WhatsApp restringe el envío libre de mensajes.';
+      icon = <Clock className="w-5 h-5 text-amber-600 shrink-0" aria-hidden="true" />;
+      bannerColor = 'bg-amber-50 border-amber-300 text-amber-950';
     } else {
       message = error.message;
     }

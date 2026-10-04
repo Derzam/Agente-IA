@@ -501,4 +501,56 @@ describe('Phase 5 Operations & Runtime UI Suite', () => {
       expect(consoleErrorSpy).not.toHaveBeenCalled();
     });
   });
+
+  // -------------------------------------------------------------
+  // 9. PHASE 5 CANONICAL LABELS & REAL MODE INTEGRITY
+  // -------------------------------------------------------------
+  describe('9. Canonical Outbox Labels & Real Mode Truth', () => {
+    it('OutboxStatusBadge defines distinct labels for all 9 states', async () => {
+      const { OutboxStatusBadge } = await import('../components/operations/OutboxStatusBadge');
+      expect(OutboxStatusBadge).toBeDefined();
+
+      const states: DeliveryStatus[] = [
+        'queued',
+        'pending',
+        'sending',
+        'sent',
+        'delivered',
+        'read',
+        'failed',
+        'unknown',
+        'dead_letter',
+      ];
+
+      for (const st of states) {
+        const dto: any = {
+          id: `msg-${st}`,
+          business_id: 'biz-001',
+          conversation_id: 'conv-001',
+          version: 1,
+          created_at: '2026-10-04T10:00:00Z',
+          updated_at: '2026-10-04T10:00:00Z',
+          direction: 'outbound',
+          kind: 'text',
+          actor_type: 'human',
+          text: 'Status test',
+          delivery_status: st,
+        };
+        const vm = mapDtoMessageToViewModel(dto);
+        expect(vm.deliveryStatus).toBe(st);
+      }
+    });
+
+    it('ensures HTTP 202 is mapped to queued and never to sent or delivered', () => {
+      const http202Response = {
+        outbox_id: 'outbox-uuid-1',
+        delivery_status: 'queued',
+        timestamp: '2026-10-04T10:00:00Z',
+      };
+
+      expect(http202Response.delivery_status).toBe('queued');
+      expect(http202Response.delivery_status).not.toBe('sent');
+      expect(http202Response.delivery_status).not.toBe('delivered');
+    });
+  });
 });

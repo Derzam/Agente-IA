@@ -91,7 +91,7 @@ export const OutboxStatusBadge: React.FC<OutboxStatusBadgeProps> = ({
           role="status"
         >
           <Loader2 className="w-3.5 h-3.5 text-sky-600 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-          <span>Enviando...</span>
+          <span>Enviando</span>
         </span>
       );
 
@@ -100,11 +100,11 @@ export const OutboxStatusBadge: React.FC<OutboxStatusBadgeProps> = ({
         return (
           <span
             className={`inline-flex items-center gap-1 text-[11px] font-mono text-slate-600 ${className}`}
-            title="Enviado al proveedor (confirmado)"
-            aria-label="Mensaje enviado"
+            title="Enviado al proveedor"
+            aria-label="Enviado al proveedor"
           >
             <Check className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
-            <span className="sr-only">Enviado</span>
+            <span className="sr-only">Enviado al proveedor</span>
           </span>
         );
       }
@@ -114,7 +114,7 @@ export const OutboxStatusBadge: React.FC<OutboxStatusBadgeProps> = ({
           role="status"
         >
           <Check className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
-          <span>Enviado</span>
+          <span>Enviado al proveedor</span>
         </span>
       );
 
@@ -165,7 +165,7 @@ export const OutboxStatusBadge: React.FC<OutboxStatusBadgeProps> = ({
       );
 
     case 'failed': {
-      const label = failureCode ? `Fallo (${failureCode})` : 'Fallo de entrega';
+      const label = failureCode ? `Falló el envío (${failureCode})` : 'Falló el envío';
       if (compact) {
         return (
           <span
@@ -195,11 +195,11 @@ export const OutboxStatusBadge: React.FC<OutboxStatusBadgeProps> = ({
         return (
           <span
             className={`inline-flex items-center gap-1 text-[11px] font-mono text-amber-600 ${className}`}
-            title="Estado de entrega por confirmar."
-            aria-label="Estado de entrega por confirmar"
+            title="Estado por confirmar"
+            aria-label="Estado por confirmar"
           >
             <HelpCircle className="w-3.5 h-3.5 text-amber-500" aria-hidden="true" />
-            <span className="sr-only">Estado de entrega por confirmar.</span>
+            <span className="sr-only">Estado por confirmar</span>
           </span>
         );
       }
@@ -209,7 +209,7 @@ export const OutboxStatusBadge: React.FC<OutboxStatusBadgeProps> = ({
           role="status"
         >
           <HelpCircle className="w-3.5 h-3.5 text-amber-600" aria-hidden="true" />
-          <span>Estado de entrega por confirmar.</span>
+          <span>Estado por confirmar</span>
         </span>
       );
 
@@ -218,11 +218,11 @@ export const OutboxStatusBadge: React.FC<OutboxStatusBadgeProps> = ({
         return (
           <span
             className={`inline-flex items-center gap-1 text-[11px] font-mono text-rose-700 ${className}`}
-            title="Descartado a dead-letter tras agotar reintentos"
-            aria-label="Mensaje descartado a dead letter"
+            title="Requiere revisión (agotados reintentos)"
+            aria-label="Requiere revisión"
           >
             <AlertOctagon className="w-3.5 h-3.5 text-rose-600" aria-hidden="true" />
-            <span className="sr-only">Descartado tras reintentos</span>
+            <span className="sr-only">Requiere revisión</span>
           </span>
         );
       }
@@ -232,7 +232,7 @@ export const OutboxStatusBadge: React.FC<OutboxStatusBadgeProps> = ({
           role="status"
         >
           <AlertOctagon className="w-3.5 h-3.5 text-rose-700" aria-hidden="true" />
-          <span>Descartado tras reintentos</span>
+          <span>Requiere revisión</span>
         </span>
       );
 
