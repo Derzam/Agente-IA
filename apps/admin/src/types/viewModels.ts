@@ -212,6 +212,12 @@ export interface BusinessDayHours {
   closeTime: string;
 }
 
+export interface TaxPolicyViewModel {
+  mode: 'none' | 'exclusive';
+  rateBps: number;
+  rounding: 'per_line_half_up';
+}
+
 export interface BusinessSettings {
   version?: number;
   name: string;
@@ -226,6 +232,7 @@ export interface BusinessSettings {
   minOrder: number;
   sessionTtlMinutes: number;
   aiEnabled: boolean;
+  taxPolicy?: TaxPolicyViewModel | null;
   emergencyCloseReason?: string;
   hours: BusinessDayHours[];
 }
