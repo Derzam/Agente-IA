@@ -3,8 +3,8 @@ import type { OrderStatus, ConversationStatus } from '@agente-ia/shared';
 export type { OrderStatus, ConversationStatus };
 
 export type FulfillmentType = 'delivery' | 'pickup';
-export type PaymentStatus = 'pending' | 'paid' | 'cancelled' | 'pay_on_delivery' | 'failed';
-export type PaymentMethod = 'cash' | 'card_on_delivery' | 'bank_transfer' | 'online_link';
+export type PaymentStatus = 'pending' | 'paid' | 'cancelled';
+export type PaymentMethod = 'cash_on_delivery';
 
 export interface OrderModifier {
   id: string;
