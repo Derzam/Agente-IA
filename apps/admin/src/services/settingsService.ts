@@ -64,6 +64,13 @@ export const settingsService = {
         min_order_minor: settings.minOrderMinor,
         session_ttl_minutes: settings.sessionTtlMinutes,
         ai_enabled: settings.aiEnabled,
+        tax_policy: settings.taxPolicy
+          ? {
+              mode: settings.taxPolicy.mode,
+              rate_bps: settings.taxPolicy.rateBps,
+              rounding: settings.taxPolicy.rounding,
+            }
+          : null,
         opening_hours: mapViewModelHoursToOpeningIntervals(settings.hours),
       },
       key,
