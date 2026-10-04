@@ -180,7 +180,11 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
     setActionError(null);
 
     const currentConv = conversations.find((c) => c.id === selectedConvId);
-    const operatorUserId = user?.id || 'usr-operator-001';
+    const operatorUserId = user?.id;
+    if (!operatorUserId) {
+      setActionError(new Error('La sesión no contiene un usuario válido. Vuelve a iniciar sesión antes de tomar el control.'));
+      return;
+    }
 
     try {
       await conversationService.requestHandoff(
@@ -193,7 +197,8 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
         selectedConvId,
         operatorUserId,
         undefined,
-        (currentConv?.version || 1) + 1
+        (currentConv?.version || 1) + 1,
+        undefined
       );
       setConversations((prev) => prev.map((c) => (c.id === selectedConvId ? updated : c)));
       loadMessages(selectedConvId);
@@ -215,14 +220,19 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
     setActionError(null);
 
     const currentConv = conversations.find((c) => c.id === selectedConvId);
-    const operatorUserId = user?.id || 'usr-operator-001';
+    const operatorUserId = user?.id;
+    if (!operatorUserId) {
+      setActionError(new Error('La sesión no contiene un usuario válido. Vuelve a iniciar sesión antes de tomar el control.'));
+      return;
+    }
 
     try {
       const updated = await conversationService.takeoverConversation(
         selectedConvId,
         operatorUserId,
         currentConv?.handoffId,
-        currentConv?.version || 1
+        currentConv?.version || 1,
+        currentConv?.handoffVersion
       );
       setConversations((prev) => prev.map((c) => (c.id === selectedConvId ? updated : c)));
       loadMessages(selectedConvId);
@@ -247,7 +257,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
       const updated = await conversationService.returnToBot(
         selectedConvId,
         currentConv?.handoffId,
-        currentConv?.version || 1
+        currentConv?.handoffVersion
       );
       setConversations((prev) => prev.map((c) => (c.id === selectedConvId ? updated : c)));
       loadMessages(selectedConvId);
