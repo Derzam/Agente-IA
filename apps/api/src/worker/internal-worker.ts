@@ -21,6 +21,16 @@ export class InternalWorker {
     readonly maxAttempts = 5,
     readonly leaseSeconds = 30,
     readonly observe: (event: Row) => void = () => {},
+    readonly extensions?: {
+      status?: (r: Repository, event: Row) => Promise<boolean>;
+      inbound?: (r: Repository, customer: string) => Promise<void>;
+      confirmed?: (
+        r: Repository,
+        ctx: import("../modules/domain/application/ordering.js").CustomerContext,
+        order: Row,
+        inbound: string,
+      ) => Promise<void>;
+    },
   ) {}
   private async scoped<T>(
     tenant: string,
@@ -172,6 +182,7 @@ export class InternalWorker {
       await audit(r, system, event.id, "customer.create", "customer", customer);
     }
     const settings = await r.one("business_settings", r.tenant);
+    if (this.extensions?.inbound) await this.extensions.inbound(r, customer.id);
     let c = (
       await r.db.query(
         "SELECT * FROM app.conversations WHERE business_id=$1 AND customer_id=$2 AND channel_id=$3 AND status<>'closed' FOR UPDATE",
@@ -276,9 +287,15 @@ export class InternalWorker {
       // A rejected button is a processed inbound message; isolate any partial command effects.
       await r.db.query("SAVEPOINT confirmation");
       try {
-        await new OrderingService(this.pool).confirmWithin(
+        const confirmed = await new OrderingService(this.pool).confirmWithin(
           r,
           { tenant: r.tenant, customer: customer.id, conversation: c.id },
+          m.id,
+        );
+        await this.extensions?.confirmed?.(
+          r,
+          { tenant: r.tenant, customer: customer.id, conversation: c.id },
+          confirmed,
           m.id,
         );
         await r.db.query("RELEASE SAVEPOINT confirmation");
@@ -297,6 +314,8 @@ export class InternalWorker {
     }
   }
   private async status(r: Repository, event: Row) {
+    if (this.extensions?.status && (await this.extensions.status(r, event)))
+      return;
     const p = event.payload;
     const status = p.content?.status;
     const rank: Record<string, number> = {

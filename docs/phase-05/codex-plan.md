@@ -40,3 +40,7 @@ Activar por primera vez el runtime externo de forma controlada en staging: hosti
 - Handoff/automation_epoch cancela resultados IA obsoletos.
 - Tests de fallos, retries, duplicate webhooks, budget, timeout y provider reconciliation.
 - Security Advisors sin hallazgos críticos y CI verde.
+
+## Aclaración de autorización y estado
+
+El usuario confirmó que no hay hosting/proyecto ni secret manager autorizados para Agente-IA. No provisionar LOGIN principals, desplegar ni crear infraestructura externa. OpenAI/Meta y destinatario sandbox no se presuponen disponibles. Completar implementación y mocks locales; mantener bloqueada la activación externa. El único proyecto externo permitido sigue siendo Supabase agente-ia-staging. Estos criterios de activación se conservan como pendientes, sin afirmar que se cumplieron. Ver [implementación](implementation.md), [seguridad](activation-and-security.md) y [evidencia](staging-validation.md).

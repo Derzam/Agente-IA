@@ -5,6 +5,7 @@ import { digest } from "../../../platform/idempotency.js";
 import { AppError, unavailable } from "../../../platform/errors.js";
 import { Repository, type Row } from "../infrastructure/repository.js";
 import { fail } from "../domain/rules.js";
+import { rate } from "../../../platform/runtime-safety.js";
 export interface Result {
   status: number;
   body: unknown;
@@ -20,7 +21,10 @@ export interface Command {
   input: unknown;
 }
 export class DomainTransactions {
-  constructor(readonly pool: pg.Pool) {}
+  constructor(
+    readonly pool: pg.Pool,
+    private runtimeRateLimit = false,
+  ) {}
   async run(
     command: Command,
     execute: (r: Repository, role: Role) => Promise<Result>,
@@ -45,6 +49,11 @@ export class DomainTransactions {
         const role = m.rows[0]?.role as Role | undefined;
         if (!role || !command.roles.includes(role)) fail("FORBIDDEN", 403);
         const r = new Repository(db, command.tenant);
+        if (
+          this.runtimeRateLimit &&
+          !(await rate(r, "admin", command.user, 120))
+        )
+          fail("RATE_LIMITED", 429);
         if (!command.key) return execute(r, role);
         const actor = `human:${command.user}`,
           key = digest(command.key),

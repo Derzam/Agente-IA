@@ -13,16 +13,37 @@ export interface CustomerContext {
   tenant: string;
   customer: string;
   conversation: string;
+  automationEpoch?: number;
+  turnId?: string;
 }
 const sha = (text: string) => createHash("sha256").update(text).digest("hex");
 const safeContext = (ctx: CustomerContext) =>
-  Object.values(ctx).every((v) => z.uuid().safeParse(v).success);
+  [ctx.tenant, ctx.customer, ctx.conversation].every(
+    (v) => z.uuid().safeParse(v).success,
+  );
 const actor = (ctx: CustomerContext) => ({
   id: ctx.customer,
   type: "customer" as const,
 });
+export interface QuoteTransport {
+  seal(
+    ctx: CustomerContext,
+    order: Row,
+    challenge: Row,
+    button: string,
+  ): unknown;
+  enqueue(
+    r: Repository,
+    ctx: CustomerContext,
+    order: Row,
+    challenge: Row,
+  ): Promise<void>;
+}
 export class OrderingService {
-  constructor(readonly pool: pg.Pool) {}
+  constructor(
+    readonly pool: pg.Pool,
+    private transport?: QuoteTransport,
+  ) {}
   private async run<T>(
     ctx: CustomerContext,
     execute: (r: Repository) => Promise<T>,
@@ -33,6 +54,22 @@ export class OrderingService {
       const r = new Repository(db, ctx.tenant);
       const conv = await r.one("conversations", ctx.conversation, true);
       if (conv.customer_id !== ctx.customer) fail("FORBIDDEN", 403);
+      if (
+        ctx.automationEpoch !== undefined &&
+        (conv.status !== "bot_active" ||
+          Number(conv.automation_epoch) !== ctx.automationEpoch ||
+          (await r.one("business_settings", ctx.tenant)).ai_enabled !== true)
+      )
+        fail("HANDOFF_REQUIRED");
+      if (ctx.turnId) {
+        const t = (
+          await db.query(
+            "SELECT 1 FROM app.conversation_turns WHERE business_id=$1 AND id=$2 AND conversation_id=$3 AND status='pending' AND lease_until>clock_timestamp() FOR SHARE",
+            [ctx.tenant, ctx.turnId, ctx.conversation],
+          )
+        ).rowCount;
+        if (!t) fail("HANDOFF_REQUIRED");
+      }
       return execute(r);
     });
   }
@@ -475,11 +512,22 @@ export class OrderingService {
           [r.tenant, cart.id, cart.version],
         )
       ).rows[0];
-      if (existing)
+      if (existing) {
+        if (this.transport) {
+          const challenge = (
+            await r.db.query(
+              "SELECT * FROM app.confirmation_challenges WHERE business_id=$1 AND order_id=$2",
+              [r.tenant, existing.id],
+            )
+          ).rows[0];
+          if (challenge?.transport_cipher)
+            await this.transport.enqueue(r, ctx, existing, challenge);
+        }
         return {
           order: await r.dto("Order", existing),
           confirmation_button: null,
         };
+      }
       const { quote, lines, fingerprint } = await this.calculate(r, cart);
       const expires = new Date(
         Math.min(Date.now() + 600000, cart.expires_at.getTime()),
@@ -514,6 +562,22 @@ export class OrderingService {
         expires_at: expires,
       });
       const request = randomUUID();
+      if (this.transport) {
+        const cipher = this.transport.seal(
+          ctx,
+          order,
+          challenge,
+          `confirm:${challenge.id}:${nonce}`,
+        );
+        await r.db.query(
+          "UPDATE app.confirmation_challenges SET transport_cipher=$2 WHERE id=$1",
+          [challenge.id, cipher],
+        );
+        await this.transport.enqueue(r, ctx, order, {
+          ...challenge,
+          transport_cipher: cipher,
+        });
+      }
       await audit(r, actor(ctx), request, "order.quote", "order", order);
       await outbox(r, "order.created", order, request, ctx.conversation);
       // Never write this opaque button/nonce to idempotency, audit, outbox or logs.

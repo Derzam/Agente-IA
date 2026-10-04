@@ -1,9 +1,8 @@
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { cursorCodec } from "../../../platform/cursor.js";
 import type { Repository, Row, Table } from "../infrastructure/repository.js";
 import { cas, fail, openingValid } from "../domain/rules.js";
 import { audit, type Actor } from "./evidence.js";
 import { digest } from "../../../platform/idempotency.js";
-const cursorSecret = randomBytes(32);
 const catalog: Record<
   string,
   { table: Table; schema: string; id: string; fields: string[] }
@@ -104,14 +103,7 @@ export async function page(
   const scope = digest([r.tenant, table, filters, sorted, limit]);
   if (query.cursor) {
     try {
-      const [data, sig] = query.cursor.split(".");
-      const expected = createHmac("sha256", cursorSecret).update(data).digest();
-      const received = Buffer.from(sig, "base64url");
-      if (
-        expected.length !== received.length ||
-        !timingSafeEqual(expected, received)
-      )
-        throw Error();
+      const data = cursorCodec().verify(query.cursor);
       const parsed = JSON.parse(Buffer.from(data, "base64url").toString());
       if (
         parsed.scope !== scope ||
@@ -152,7 +144,7 @@ export async function page(
         value: sorted ? last.sort_order : last.created_at.toISOString(),
       }),
     ).toString("base64url");
-    cursor = `${data}.${createHmac("sha256", cursorSecret).update(data).digest("base64url")}`;
+    cursor = cursorCodec().sign(data);
   }
   return {
     status: 200,

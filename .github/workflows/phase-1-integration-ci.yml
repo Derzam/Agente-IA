@@ -12,6 +12,7 @@ on:
       - integration/phase-02
       - codex/phase-03-domain-schema
       - codex/phase-04-domain-services
+      - codex/phase-05-staging-runtime-ai-meta
 
 permissions:
   contents: read
