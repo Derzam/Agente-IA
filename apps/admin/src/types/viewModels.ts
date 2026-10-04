@@ -106,6 +106,7 @@ export interface ConversationSummary {
   activeOrderId?: string;
   handoffId?: string;
   handoffRequestedAt?: string;
+  handoffVersion?: number;
   handoffReason?: string;
   handoffStatus?: 'pending' | 'active' | 'resolved';
 }
