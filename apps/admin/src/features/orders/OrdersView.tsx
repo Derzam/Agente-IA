@@ -733,7 +733,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                 <span className="text-orange-600">${selectedOrder.total.toFixed(2)}</span>
               </div>
               <div className="pt-2 text-[11px] text-slate-500 flex justify-between items-center">
-                <span>Método: {selectedOrder.paymentMethod === 'cash' || selectedOrder.paymentMethod === 'card_on_delivery' ? 'Efectivo contra entrega' : selectedOrder.paymentMethod}</span>
+                <span>Método: Efectivo contra entrega</span>
                 <span className={`capitalize font-semibold px-2 py-0.5 rounded-full ${
                   selectedOrder.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
                 }`}>
