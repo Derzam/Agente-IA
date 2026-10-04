@@ -12,6 +12,22 @@ import type { RequestOptions } from '@/api/types';
 let localConversations: ConversationSummary[] = [...mockConversations];
 let localMessages: Record<string, ChatMessage[]> = { ...mockMessagesByConversation };
 
+async function fetchConversationWithHandoff(
+  conversationId: string,
+  options?: RequestOptions
+): Promise<ConversationSummary> {
+  const [conversation, handoffs] = await Promise.all([
+    endpoints.getConversationById(conversationId, undefined, options),
+    endpoints.getHandoffs(undefined, undefined, options),
+  ]);
+  const handoff = handoffs.find(
+    (item) =>
+      item.conversation_id === conversationId &&
+      (item.status === 'pending' || item.status === 'active')
+  );
+  return mapDtoConversationToViewModel(conversation, { handoff });
+}
+
 export const conversationService = {
   async getConversations(
     params?: { status?: string; limit?: number; cursor?: string },
@@ -24,8 +40,18 @@ export const conversationService = {
       return Promise.resolve([...localConversations]);
     }
 
-    const dtoList = await endpoints.getConversations(params, undefined, options);
-    return dtoList.map((dto) => mapDtoConversationToViewModel(dto));
+    const [dtoList, handoffs] = await Promise.all([
+      endpoints.getConversations(params, undefined, options),
+      endpoints.getHandoffs(undefined, undefined, options),
+    ]);
+    const handoffByConversation = new Map(
+      handoffs
+        .filter((item) => item.status === 'pending' || item.status === 'active')
+        .map((item) => [item.conversation_id, item])
+    );
+    return dtoList.map((dto) =>
+      mapDtoConversationToViewModel(dto, { handoff: handoffByConversation.get(dto.id) })
+    );
   },
 
   async getMessages(conversationId: string, options?: RequestOptions): Promise<ChatMessage[]> {
@@ -226,8 +252,7 @@ export const conversationService = {
     }
 
     await this.claimHandoff(targetHandoffId, operatorUserId, expectedHandoffVersion);
-    const updatedConv = await endpoints.getConversationById(conversationId);
-    return mapDtoConversationToViewModel(updatedConv);
+    return fetchConversationWithHandoff(conversationId);
   },
 
   /**
@@ -262,7 +287,6 @@ export const conversationService = {
       );
     }
 
-    const updatedConv = await endpoints.getConversationById(conversationId);
-    return mapDtoConversationToViewModel(updatedConv);
+    return fetchConversationWithHandoff(conversationId);
   },
 };
