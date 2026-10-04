@@ -64,6 +64,13 @@ export const settingsService = {
         min_order_minor: settings.minOrderMinor,
         session_ttl_minutes: settings.sessionTtlMinutes,
         ai_enabled: settings.aiEnabled,
+        tax_policy: settings.taxPolicy
+          ? {
+              mode: settings.taxPolicy.mode,
+              rate_bps: settings.taxPolicy.rateBps,
+              rounding: settings.taxPolicy.rounding,
+            }
+          : null,
         opening_hours: mapViewModelHoursToOpeningIntervals(settings.hours),
       },
       key,
@@ -146,34 +153,5 @@ export const settingsService = {
 
     cachedSettingsVersion = updatedDto.version;
     return mapDtoToViewModelAgentConfig(updatedDto);
-  },
-
-  async testAgentPrompt(message: string): Promise<{ reply: string; intent: string }> {
-    if (!USE_MOCK_DATA) {
-      throw new Error('El simulador del agente no está disponible en modo real porque OpenAPI no define un endpoint de prueba.');
-    }
-    const lower = message.toLowerCase();
-    if (lower.includes('hola') || lower.includes('buenas')) {
-      return {
-        reply: localAgentConfig.welcomeGreeting,
-        intent: 'GREETING_START',
-      };
-    }
-    if (lower.includes('precio') || lower.includes('cuesta')) {
-      return {
-        reply: 'La Burger Doble Queso cuesta $8.50. Incluye doble carne 150g y cheddar americano fundido 🍔.',
-        intent: 'PRICE_QUERY',
-      };
-    }
-    if (lower.includes('humano') || lower.includes('asesor') || lower.includes('persona')) {
-      return {
-        reply: localAgentConfig.handoffToHumanMessage,
-        intent: 'HUMAN_HANDOFF_REQUEST',
-      };
-    }
-    return {
-      reply: `¡Entendido! Con gusto te ayudo con "${message}". ¿Deseas agregar alguna de nuestras hamburguesas o revisar el menú completo?`,
-      intent: 'GENERAL_INQUIRY',
-    };
   },
 };

@@ -1,3 +1,4 @@
+import { confirmationEvidence } from '../../platform/confirmation-evidence.js';
 import { z } from 'zod';
 import { digest } from '../../platform/idempotency.js';
 import { validation } from '../../platform/errors.js';
@@ -56,7 +57,7 @@ function message(phone: string, raw: unknown, now: number): NormalizedEvent {
     const interactive = record(m.interactive);
     const reply = record(interactive.type === 'button_reply' ? interactive.button_reply : interactive.type === 'list_reply' ? interactive.list_reply : null);
     if (optionalString(reply.id)) {
-      kind = 'interactive'; content = { reply_id: reply.id, title: optionalString(reply.title, 200) };
+      kind = 'interactive'; content = { reply_id: confirmationEvidence(reply.id as string), title: optionalString(reply.title, 200) };
     }
   } else if (m.type === 'location') {
     const location = record(m.location);

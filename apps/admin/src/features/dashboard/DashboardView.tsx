@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Clock,
   Flame,
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Card, CardHeader, CardBody } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
+import { ApiErrorBanner } from '@/components/common/ApiErrorBanner';
 import { OrderStatusBadge, FulfillmentBadge } from '@/components/common/StatusBadge';
 import { metricsService } from '@/services/metricsService';
 import { orderService } from '@/services/orderService';
@@ -20,6 +21,7 @@ import { conversationService } from '@/services/conversationService';
 import { DashboardMetrics, Order, ConversationSummary } from '@/types/viewModels';
 import type { OrderAction } from '@agente-ia/shared';
 import { NavItemKey } from '@/components/layout/Sidebar';
+import { usePolling } from '@/hooks/usePolling';
 
 interface DashboardViewProps {
   onNavigate: (view: NavItemKey) => void;
@@ -35,27 +37,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
   const [waitingChats, setWaitingChats] = useState<ConversationSummary[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [apiError, setApiError] = useState<Error | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    setIsLoading(true);
+  const loadData = useCallback(async (signal?: AbortSignal) => {
     try {
       const [m, orders, convs] = await Promise.all([
-        metricsService.getDashboardMetrics(),
-        orderService.getOrders(),
-        conversationService.getConversations(),
+        metricsService.getDashboardMetrics(undefined, { signal }),
+        orderService.getOrders(undefined, { signal }),
+        conversationService.getConversations(undefined, { signal }),
       ]);
       setMetrics(m);
       setActiveOrders(orders.filter((o: Order) => o.status !== 'delivered' && o.status !== 'cancelled'));
       setWaitingChats(convs.filter((c: ConversationSummary) => c.status === 'human_pending'));
-    } finally {
-      setIsLoading(false);
+      setApiError(null);
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        setApiError(err);
+      }
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Polling every 8 seconds while view is active
+  usePolling({
+    callback: async (signal) => {
+      await loadData(signal);
+    },
+    intervalMs: 8000,
+  });
 
   const handleQuickAdvance = async (
     orderId: string,
@@ -75,7 +87,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     loadData();
   };
 
-  if (isLoading || !metrics) {
+  if (!metrics) {
+    if (apiError) {
+      return (
+        <div className="p-6 max-w-7xl mx-auto space-y-4">
+          <ApiErrorBanner error={apiError} onRetry={() => loadData()} />
+        </div>
+      );
+    }
     return (
       <div className="p-6 space-y-6">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -89,6 +108,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
+      {apiError && (
+        <ApiErrorBanner error={apiError} onRetry={() => loadData()} />
+      )}
+
       {/* URGENT ALERT BANNER (If customers are waiting for human handoff) */}
       {waitingChats.length > 0 && (
         <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm animate-pulse">

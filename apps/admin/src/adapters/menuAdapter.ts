@@ -1,9 +1,13 @@
 import type {
   Category as DTOCategory,
-  Product as DTOProduct,
   ProductOption as DTOProductOption,
   ProductOptionInput as DTOProductOptionInput,
 } from '@agente-ia/shared';
+import type {
+  Phase4Product as DTOProduct,
+  Phase4ModifierGroup as DTOModifierGroup,
+  Phase4ModifierOption as DTOModifierOption,
+} from '@/api/endpoints';
 import type {
   MenuItemCategory as ViewModelCategory,
   MenuItem as ViewModelMenuItem,
@@ -59,6 +63,36 @@ export function flattenModifierGroupsForWrite(groups: ViewModelModifierGroup[] =
       input: mapModifierOptionToDtoInput(group, option),
     }))
   );
+}
+
+export function mapCanonicalModifierGroupsToViewModel(
+  groups: Array<DTOModifierGroup & { options: DTOModifierOption[] }> = []
+): ViewModelModifierGroup[] {
+  return groups
+    .map((group) => ({
+      id: group.id,
+      name: group.name,
+      required: group.required,
+      minSelect: group.min_select,
+      maxSelect: group.max_select,
+      minSelections: group.min_select,
+      maxSelections: group.max_select,
+      sortOrder: group.sort_order,
+      active: group.active,
+      version: group.version,
+      options: (group.options || [])
+        .map((option) => ({
+          id: option.id,
+          name: option.name,
+          priceDeltaMinor: option.price_delta_minor,
+          priceDelta: minorToDecimal(option.price_delta_minor),
+          isAvailable: option.available,
+          sortOrder: option.sort_order,
+          version: option.version,
+        }))
+        .sort((a, b) => a.sortOrder - b.sortOrder),
+    }))
+    .sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
 /**
@@ -130,7 +164,10 @@ export function mapDtoProductToViewModel(
     priceMinor: dto.price_minor,
     imageUrl: dto.image_url || undefined,
     isAvailable: dto.available,
-    modifierGroups: mapDtoProductOptionsToModifierGroups(dto.options),
+    modifierGroups:
+      dto.modifier_groups !== undefined
+        ? mapCanonicalModifierGroupsToViewModel(dto.modifier_groups)
+        : mapDtoProductOptionsToModifierGroups(dto.options),
     createdAt: dto.created_at,
     updatedAt: dto.updated_at,
   };

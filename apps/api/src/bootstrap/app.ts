@@ -10,6 +10,8 @@ import type { InboxRepository } from '../modules/inbox/application/ports.js';
 import { registerWhatsAppRoutes } from '../integrations/whatsapp/routes.js';
 import { registerIdentityRoutes } from '../modules/identity/http/routes.js';
 import { AppError, errorEnvelope, unavailable, validation } from '../platform/errors.js';
+import type pg from 'pg';
+import { registerDomainRoutes } from '../modules/domain/http/routes.js';
 
 export interface AppDependencies {
   config: Config;
@@ -20,6 +22,7 @@ export interface AppDependencies {
   close?: () => Promise<void>;
   logger?: FastifyServerOptions['logger'];
   rateLimitMax?: number;
+  domainPool?: pg.Pool;
 }
 export async function buildApp(deps: AppDependencies) {
   const app = Fastify({
@@ -59,7 +62,8 @@ export async function buildApp(deps: AppDependencies) {
     return { status: 'ready' };
   });
 
-  registerIdentityRoutes(app, deps.auth, deps.identities);
+  registerIdentityRoutes(app, deps.auth, deps.identities,!deps.domainPool);
+  if(deps.domainPool) registerDomainRoutes(app,deps.auth,deps.domainPool);
   await registerWhatsAppRoutes(app, deps.config, deps.inbox);
   if (deps.close) app.addHook('onClose', deps.close);
   return app;

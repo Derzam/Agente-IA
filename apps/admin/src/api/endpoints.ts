@@ -33,6 +33,70 @@ import type {
 import { ApiClient, defaultApiClient } from './client';
 import { RequestOptions } from './types';
 
+export interface Phase4TaxPolicy {
+  mode: 'none' | 'exclusive';
+  rate_bps: number;
+  rounding: 'per_line_half_up';
+}
+
+export type Phase4BusinessSettings = BusinessSettings & {
+  tax_policy?: Phase4TaxPolicy | null;
+};
+
+export type Phase4SettingsUpdate = SettingsUpdate & {
+  tax_policy?: Phase4TaxPolicy | null;
+};
+
+export interface Phase4ModifierGroup {
+  id: string;
+  business_id: string;
+  product_id: string;
+  name: string;
+  required: boolean;
+  min_select: number;
+  max_select: number;
+  sort_order: number;
+  active: boolean;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Phase4ModifierOption {
+  id: string;
+  business_id: string;
+  modifier_group_id: string;
+  name: string;
+  price_delta_minor: number;
+  available: boolean;
+  sort_order: number;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type Phase4Product = Product & {
+  modifier_groups?: Array<Phase4ModifierGroup & { options: Phase4ModifierOption[] }>;
+};
+
+export type Phase4ModifierGroupInput = Pick<
+  Phase4ModifierGroup,
+  'name' | 'required' | 'min_select' | 'max_select' | 'sort_order' | 'active'
+>;
+
+export type Phase4ModifierGroupUpdate = Partial<Phase4ModifierGroupInput> & {
+  expected_version: number;
+};
+
+export type Phase4ModifierOptionInput = Pick<
+  Phase4ModifierOption,
+  'name' | 'price_delta_minor' | 'available' | 'sort_order'
+>;
+
+export type Phase4ModifierOptionUpdate = Partial<Phase4ModifierOptionInput> & {
+  expected_version: number;
+};
+
 export class ApiEndpoints {
   constructor(private client: ApiClient = defaultApiClient) {}
 
@@ -47,17 +111,17 @@ export class ApiEndpoints {
   }
 
   // /v1/businesses/{business_id}/settings
-  async getSettings(businessId?: string, options?: RequestOptions): Promise<BusinessSettings> {
-    return this.client.businessRequest<BusinessSettings>('/settings', { ...options, businessId });
+  async getSettings(businessId?: string, options?: RequestOptions): Promise<Phase4BusinessSettings> {
+    return this.client.businessRequest<Phase4BusinessSettings>('/settings', { ...options, businessId });
   }
 
   async updateSettings(
-    update: SettingsUpdate,
+    update: Phase4SettingsUpdate,
     idempotencyKey?: string,
     businessId?: string,
     options?: RequestOptions
-  ): Promise<BusinessSettings> {
-    return this.client.businessRequest<BusinessSettings>('/settings', {
+  ): Promise<Phase4BusinessSettings> {
+    return this.client.businessRequest<Phase4BusinessSettings>('/settings', {
       ...options,
       businessId,
       method: 'PATCH',
@@ -122,20 +186,20 @@ export class ApiEndpoints {
     params?: { category_id?: string; available?: boolean },
     businessId?: string,
     options?: RequestOptions
-  ): Promise<Product[]> {
+  ): Promise<Phase4Product[]> {
     const query = new URLSearchParams();
     if (params?.category_id) query.set('category_id', params.category_id);
     if (params?.available !== undefined) query.set('available', String(params.available));
     const qs = query.toString() ? `?${query.toString()}` : '';
-    return this.client.businessRequest<Product[]>(`/products${qs}`, { ...options, businessId });
+    return this.client.businessRequest<Phase4Product[]>(`/products${qs}`, { ...options, businessId });
   }
 
   async getProductById(
     productId: string,
     businessId?: string,
     options?: RequestOptions
-  ): Promise<Product> {
-    return this.client.businessRequest<Product>(`/products/${productId}`, { ...options, businessId });
+  ): Promise<Phase4Product> {
+    return this.client.businessRequest<Phase4Product>(`/products/${productId}`, { ...options, businessId });
   }
 
   async createProduct(
@@ -143,8 +207,8 @@ export class ApiEndpoints {
     idempotencyKey?: string,
     businessId?: string,
     options?: RequestOptions
-  ): Promise<Product> {
-    return this.client.businessRequest<Product>('/products', {
+  ): Promise<Phase4Product> {
+    return this.client.businessRequest<Phase4Product>('/products', {
       ...options,
       businessId,
       method: 'POST',
@@ -159,8 +223,8 @@ export class ApiEndpoints {
     idempotencyKey?: string,
     businessId?: string,
     options?: RequestOptions
-  ): Promise<Product> {
-    return this.client.businessRequest<Product>(`/products/${productId}`, {
+  ): Promise<Phase4Product> {
+    return this.client.businessRequest<Phase4Product>(`/products/${productId}`, {
       ...options,
       businessId,
       method: 'PATCH',
@@ -175,13 +239,122 @@ export class ApiEndpoints {
     idempotencyKey?: string,
     businessId?: string,
     options?: RequestOptions
-  ): Promise<Product> {
-    return this.client.businessRequest<Product>(`/products/${productId}?expected_version=${expectedVersion}`, {
+  ): Promise<Phase4Product> {
+    return this.client.businessRequest<Phase4Product>(`/products/${productId}?expected_version=${expectedVersion}`, {
       ...options,
       businessId,
       method: 'DELETE',
       idempotencyKey,
     });
+  }
+
+  // Phase 4 canonical hierarchical modifier contract
+  async getModifierGroups(
+    productId: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<Phase4ModifierGroup[]> {
+    return this.client.businessRequest<Phase4ModifierGroup[]>(
+      `/products/${productId}/modifier-groups`,
+      { ...options, businessId }
+    );
+  }
+
+  async createModifierGroup(
+    productId: string,
+    input: Phase4ModifierGroupInput,
+    idempotencyKey: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<Phase4ModifierGroup> {
+    return this.client.businessRequest<Phase4ModifierGroup>(
+      `/products/${productId}/modifier-groups`,
+      { ...options, businessId, method: 'POST', idempotencyKey, body: JSON.stringify(input) }
+    );
+  }
+
+  async updateModifierGroup(
+    productId: string,
+    groupId: string,
+    update: Phase4ModifierGroupUpdate,
+    idempotencyKey: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<Phase4ModifierGroup> {
+    return this.client.businessRequest<Phase4ModifierGroup>(
+      `/products/${productId}/modifier-groups/${groupId}`,
+      { ...options, businessId, method: 'PATCH', idempotencyKey, body: JSON.stringify(update) }
+    );
+  }
+
+  async deleteModifierGroup(
+    productId: string,
+    groupId: string,
+    expectedVersion: number,
+    idempotencyKey: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<void> {
+    return this.client.businessRequest<void>(
+      `/products/${productId}/modifier-groups/${groupId}?expected_version=${expectedVersion}`,
+      { ...options, businessId, method: 'DELETE', idempotencyKey }
+    );
+  }
+
+  async getModifierOptions(
+    productId: string,
+    groupId: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<Phase4ModifierOption[]> {
+    return this.client.businessRequest<Phase4ModifierOption[]>(
+      `/products/${productId}/modifier-groups/${groupId}/options`,
+      { ...options, businessId }
+    );
+  }
+
+  async createModifierOption(
+    productId: string,
+    groupId: string,
+    input: Phase4ModifierOptionInput,
+    idempotencyKey: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<Phase4ModifierOption> {
+    return this.client.businessRequest<Phase4ModifierOption>(
+      `/products/${productId}/modifier-groups/${groupId}/options`,
+      { ...options, businessId, method: 'POST', idempotencyKey, body: JSON.stringify(input) }
+    );
+  }
+
+  async updateModifierOption(
+    productId: string,
+    groupId: string,
+    optionId: string,
+    update: Phase4ModifierOptionUpdate,
+    idempotencyKey: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<Phase4ModifierOption> {
+    return this.client.businessRequest<Phase4ModifierOption>(
+      `/products/${productId}/modifier-groups/${groupId}/options/${optionId}`,
+      { ...options, businessId, method: 'PATCH', idempotencyKey, body: JSON.stringify(update) }
+    );
+  }
+
+  async deleteModifierOption(
+    productId: string,
+    groupId: string,
+    optionId: string,
+    expectedVersion: number,
+    idempotencyKey: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<void> {
+    return this.client.businessRequest<void>(
+      `/products/${productId}/modifier-groups/${groupId}/options/${optionId}?expected_version=${expectedVersion}`,
+      { ...options, businessId, method: 'DELETE', idempotencyKey }
+    );
   }
 
   // /v1/businesses/{business_id}/products/{product_id}/options
