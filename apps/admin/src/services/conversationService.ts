@@ -76,8 +76,12 @@ export const conversationService = {
       return Promise.resolve(newMsg);
     }
 
+    if (!USE_MOCK_DATA && isInternalNote) {
+      throw new Error('Las notas internas privadas no están soportadas por el contrato de la API v0.1.');
+    }
+
     // Call canonical POST /conversations/{id}/messages
-    await endpoints.sendMessage(
+    const receipt = await endpoints.sendMessage(
       conversationId,
       {
         text,
@@ -88,16 +92,17 @@ export const conversationService = {
       options
     );
 
-    // Return optimistic chat message presentation model
+    // Return message receipt with status 'queued' (202 Accepted)
     return {
-      id: `msg-${Date.now()}`,
+      id: receipt?.outbox_id || `msg-${Date.now()}`,
       conversationId,
       sender: 'staff',
       senderName: 'Operador',
       type: 'text',
       content: text,
       timestamp: new Date().toISOString(),
-      isInternalNote,
+      isInternalNote: false,
+      deliveryStatus: receipt?.status || 'queued',
     };
   },
 

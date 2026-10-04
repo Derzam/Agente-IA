@@ -89,6 +89,7 @@ export interface ChatMessage {
   timestamp: string;
   isInternalNote?: boolean;
   orderReferenceId?: string;
+  deliveryStatus?: 'queued' | 'pending' | 'sent' | 'delivered' | 'read' | 'failed' | 'unknown' | null;
 }
 
 export interface ConversationSummary {

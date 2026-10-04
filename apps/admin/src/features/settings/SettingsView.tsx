@@ -19,14 +19,12 @@ import { VersionConflictNotice } from '@/components/common/VersionConflictNotice
 import { ApiErrorBanner } from '@/components/common/ApiErrorBanner';
 import { settingsService } from '@/services/settingsService';
 import { deliveryZoneService } from '@/services/deliveryZoneService';
-import { USE_MOCK_DATA } from '@/services/apiClient';
-import { AgentConfig, BusinessSettings, DeliveryZone } from '@/types/viewModels';
+import { BusinessSettings, DeliveryZone } from '@/types/viewModels';
 import { decimalToMinor } from '@/adapters/moneyAdapter';
 import { VersionConflictError } from '@/api/types';
 
 export const SettingsView: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<'agent' | 'business' | 'delivery'>('business');
-  const [agentConfig, setAgentConfig] = useState<AgentConfig | null>(null);
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings | null>(null);
   const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([]);
   const [isSavedNotice, setIsSavedNotice] = useState(false);
@@ -39,14 +37,6 @@ export const SettingsView: React.FC = () => {
   const [isZoneModalOpen, setIsZoneModalOpen] = useState(false);
   const [isNewZone, setIsNewZone] = useState(false);
 
-  // Playground state
-  const [testInput, setTestInput] = useState('');
-  const [testChat, setTestChat] = useState<{ sender: 'user' | 'bot'; text: string; intent?: string }[]>(
-    USE_MOCK_DATA
-      ? [{ sender: 'bot', text: '¡Hola! Soy el asistente en modo de prueba. Escríbeme algo como "Hola", "¿Cuánto cuesta la hamburguesa?" o "Quiero hablar con un humano".' }]
-      : []
-  );
-
   useEffect(() => {
     loadSettings();
   }, []);
@@ -56,12 +46,10 @@ export const SettingsView: React.FC = () => {
     setConflictError(null);
     setApiError(null);
     try {
-      const [agent, biz, zones] = await Promise.all([
-        settingsService.getAgentConfig(),
+      const [biz, zones] = await Promise.all([
         settingsService.getBusinessSettings(),
         deliveryZoneService.getDeliveryZones(),
       ]);
-      setAgentConfig(agent);
       setBusinessSettings(biz);
       setDeliveryZones(zones);
     } catch (err: any) {
@@ -72,25 +60,6 @@ export const SettingsView: React.FC = () => {
       }
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleSaveAgent = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!agentConfig) return;
-    setConflictError(null);
-    setApiError(null);
-    try {
-      const updated = await settingsService.updateAgentConfig(agentConfig);
-      setAgentConfig(updated);
-      showSavedNotification();
-    } catch (err: any) {
-      if (err instanceof VersionConflictError) {
-        setConflictError(err.message);
-        await loadSettings();
-      } else {
-        setApiError(err);
-      }
     }
   };
 
@@ -116,19 +85,6 @@ export const SettingsView: React.FC = () => {
   const showSavedNotification = () => {
     setIsSavedNotice(true);
     setTimeout(() => setIsSavedNotice(false), 3000);
-  };
-
-  const handleSendTestMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!testInput.trim()) return;
-
-    const userText = testInput.trim();
-    setTestChat((prev) => [...prev, { sender: 'user', text: userText }]);
-    setTestInput('');
-
-    if (!USE_MOCK_DATA) return;
-    const res = await settingsService.testAgentPrompt(userText);
-    setTestChat((prev) => [...prev, { sender: 'bot', text: res.reply, intent: res.intent }]);
   };
 
   // ==========================================
@@ -557,105 +513,56 @@ export const SettingsView: React.FC = () => {
       )}
 
       {/* ========================================== */}
-      {/* TAB 3: AGENT SETTINGS & PLAYGROUND        */}
+      {/* TAB 3: AI & WHATSAPP INFRASTRUCTURE STATUS */}
       {/* ========================================== */}
-      {activeSubTab === 'agent' && agentConfig && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-7 space-y-6">
-            <Card>
-              <CardHeader
-                title="Configuración de Respuestas Automáticas"
-                subtitle="Parámetros de conversación del asistente"
-              />
-              <CardBody>
-                <form onSubmit={handleSaveAgent} className="space-y-5 text-xs sm:text-sm">
-                  <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
-                    <div>
-                      <h4 className="font-bold text-slate-900">Asistente Activo</h4>
-                      <p className="text-xs text-slate-500 mt-0.5">Controla la automatización</p>
-                    </div>
-                    <Switch
-                      checked={agentConfig.isEnabled}
-                      onChange={(checked) => setAgentConfig({ ...agentConfig, isEnabled: checked })}
-                      size="md"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Nombre del Asistente:</label>
-                    <input
-                      type="text"
-                      value={agentConfig.assistantName}
-                      onChange={(e) => setAgentConfig({ ...agentConfig, assistantName: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Mensaje de Bienvenida:</label>
-                    <textarea
-                      rows={2}
-                      value={agentConfig.welcomeGreeting}
-                      onChange={(e) => setAgentConfig({ ...agentConfig, welcomeGreeting: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Mensaje Fuera de Horario:</label>
-                    <textarea
-                      rows={2}
-                      value={agentConfig.outsideHoursMessage}
-                      onChange={(e) => setAgentConfig({ ...agentConfig, outsideHoursMessage: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-100 flex justify-end">
-                    <Button variant="primary" size="md" type="submit" leftIcon={<Save className="w-4 h-4" />}>
-                      Guardar Configuración
-                    </Button>
-                  </div>
-                </form>
-              </CardBody>
-            </Card>
-          </div>
-
-          <div className="lg:col-span-5 space-y-4">
-            <Card>
-              <CardHeader title="Simulador de Respuestas" subtitle="Prueba de mensajes de clientes" />
-              <CardBody>
-                <div className="space-y-3">
-                  <div className="h-64 overflow-y-auto space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs">
-                    {testChat.map((m, i) => (
-                      <div key={i} className={`flex ${m.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div
-                          className={`max-w-[85%] p-2.5 rounded-xl ${
-                            m.sender === 'user' ? 'bg-orange-600 text-white' : 'bg-white border border-slate-200 text-slate-800'
-                          }`}
-                        >
-                          <p>{m.text}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <form onSubmit={handleSendTestMessage} className="flex gap-2">
-                    <input
-                      type="text"
-                      value={testInput}
-                      onChange={(e) => setTestInput(e.target.value)}
-                      placeholder="Escribe un mensaje de prueba..."
-                      className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none"
-                    />
-                    <Button variant="primary" size="sm" type="submit">
-                      Enviar
-                    </Button>
-                  </form>
+      {activeSubTab === 'agent' && (
+        <div className="max-w-4xl space-y-6">
+          <Card>
+            <CardHeader
+              title="Estado de Inteligencia Artificial & Meta WhatsApp"
+              subtitle="Información de infraestructura para la Fase 4"
+            />
+            <CardBody className="space-y-4 text-xs sm:text-sm text-slate-700">
+              <div className="p-4 bg-sky-50 border border-sky-200 rounded-xl space-y-2">
+                <div className="flex items-center gap-2 text-sky-900 font-bold text-sm">
+                  <Bot className="w-5 h-5 text-sky-600" />
+                  <span>Automatización Canónica Activa: {businessSettings?.aiEnabled ? 'Sí' : 'No'}</span>
                 </div>
-              </CardBody>
-            </Card>
-          </div>
+                <p className="text-slate-600">
+                  La activación del asistente se controla de manera autoritativa mediante la propiedad{' '}
+                  <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-900 font-mono">ai_enabled</code>{' '}
+                  del contrato <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-900 font-mono">BusinessSettings</code>.
+                  Puedes modificarla en la pestaña <strong>Configuración & Horarios</strong>.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                  <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                    Modelos de Lenguaje (OpenAI)
+                  </h4>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    La integración con OpenAI se encuentra deshabilitada en el backend durante esta fase. No se aceptan prompts ni parámetros de generación no soportados por el esquema canónico.
+                  </p>
+                </div>
+
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                  <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                    Canal Saliente (Meta WhatsApp)
+                  </h4>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    El envío de mensajes salientes a la API de WhatsApp Cloud está en modo simulado/sandbox. Los mensajes humanos se encolan en la outbox conforme al contrato.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-slate-100 rounded-xl border border-slate-200 text-slate-600 text-xs">
+                <strong>Gobernanza de Contrato:</strong> Para evitar estados ficticios, este panel no inventa nombres de asistente, tonos de respuesta, mensajes de bienvenida simulados ni áreas de pruebas desconectadas del backend real.
+              </div>
+            </CardBody>
+          </Card>
         </div>
       )}
 

@@ -103,6 +103,7 @@ export const deliveryZoneService = {
       zone.id,
       {
         name: zone.name,
+        polygon_geojson: zone.polygonGeojson,
         fee_minor: zone.feeMinor ?? decimalToMinor(zone.fee),
         min_order_minor: zone.minOrderMinor ?? decimalToMinor(zone.minOrder),
         priority: zone.priority,

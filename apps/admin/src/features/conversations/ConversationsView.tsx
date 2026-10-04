@@ -18,8 +18,8 @@ import { ConversationSummary, ChatMessage, Order } from '@/types/viewModels';
 import type { HandoffReason } from '@agente-ia/shared';
 import { useSession } from '@/auth/SessionContext';
 import { usePolling } from '@/hooks/usePolling';
-import { VersionConflictError, NetworkError } from '@/api/types';
-import { newIdempotencyKey } from '@/services/apiClient';
+import { VersionConflictError, NetworkError, NormalizedApiError } from '@/api/types';
+import { newIdempotencyKey, USE_MOCK_DATA } from '@/services/apiClient';
 import { NavItemKey } from '@/components/layout/Sidebar';
 
 const CANONICAL_REASONS: { id: HandoffReason; label: string }[] = [
@@ -161,7 +161,15 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
         retainedMessageKeysRef.current.set(gestureKey, keyToUse);
         setActionError(err);
       } else {
-        setActionError(err);
+        const errCode = (err instanceof NormalizedApiError ? err.code : err?.code) || '';
+        const errMsg = String(err?.message || '');
+        if (errCode === 'WINDOW_CLOSED' || errMsg.includes('WINDOW_CLOSED')) {
+          setActionError(new Error('La ventana de 24 horas de Meta WhatsApp ha expirado. Espera a que el cliente envíe un mensaje nuevo para poder responderle.'));
+        } else if (errCode === 'HANDOFF_REQUIRED' || errMsg.includes('HANDOFF_REQUIRED')) {
+          setActionError(new Error('Se requiere tomar el control de la conversación (Handoff activo) antes de poder enviar mensajes.'));
+        } else {
+          setActionError(err);
+        }
       }
     }
   };
@@ -487,7 +495,19 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
                         <span>
                           {msg.isInternalNote ? '📝 Nota interna' : msg.senderName || msg.sender}
                         </span>
-                        <span>{msg.timestamp.slice(11, 16)}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span>{msg.timestamp.slice(11, 16)}</span>
+                          {!isCustomer && !msg.isInternalNote && msg.deliveryStatus && (
+                            <span className="text-[10px] font-mono ml-0.5">
+                              {msg.deliveryStatus === 'queued' && <span title="Encolado">🕒</span>}
+                              {msg.deliveryStatus === 'pending' && <span title="Pendiente">⏳</span>}
+                              {msg.deliveryStatus === 'sent' && <span title="Enviado">✓</span>}
+                              {msg.deliveryStatus === 'delivered' && <span title="Entregado">✓✓</span>}
+                              {msg.deliveryStatus === 'read' && <span title="Leído" className="text-blue-300 font-bold">✓✓</span>}
+                              {msg.deliveryStatus === 'failed' && <span title="Fallo de entrega" className="text-red-300 font-bold">❌</span>}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                     </div>
@@ -535,30 +555,65 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
 
             {/* Input Message Form */}
             <form onSubmit={handleSendMessage} className="p-3 border-t border-slate-200 bg-white">
-              <div className="flex items-center gap-2 mb-2">
-                <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isInternalNote}
-                    onChange={(e) => setIsInternalNote(e.target.checked)}
-                    className="rounded text-orange-600 focus:ring-orange-500"
-                  />
-                  <Lock className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Guardar como nota interna privada (no se envía a WhatsApp)</span>
-                </label>
-              </div>
+              {USE_MOCK_DATA && (
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isInternalNote}
+                      onChange={(e) => setIsInternalNote(e.target.checked)}
+                      className="rounded text-orange-600 focus:ring-orange-500"
+                    />
+                    <Lock className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Guardar como nota interna privada (no se envía a WhatsApp)</span>
+                  </label>
+                </div>
+              )}
+
+              {currentConv.status !== 'human_active' && !isInternalNote && (
+                <div className="mb-2 p-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between text-xs text-amber-800">
+                  <span>Debes tomar el control de la conversación para responder al cliente por WhatsApp.</span>
+                  {currentConv.status === 'human_pending' ? (
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="sm"
+                      onClick={handleTakeover}
+                      leftIcon={<UserCheck className="w-3.5 h-3.5" />}
+                    >
+                      Tomar control
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsHandoffModalOpen(true)}
+                      leftIcon={<UserCheck className="w-3.5 h-3.5" />}
+                    >
+                      Solicitar Handoff
+                    </Button>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center gap-2">
                 <input
                   type="text"
                   value={inputText}
+                  disabled={currentConv.status !== 'human_active' && !isInternalNote}
                   onChange={(e) => setInputText(e.target.value)}
                   placeholder={
-                    isInternalNote
+                    currentConv.status !== 'human_active' && !isInternalNote
+                      ? 'Debes tomar el control de la conversación para responder...'
+                      : isInternalNote
                       ? 'Escribe una nota interna para el equipo...'
                       : 'Escribe un mensaje para responder al cliente...'
                   }
                   className={`flex-1 text-xs px-3.5 py-2.5 border rounded-xl focus:outline-none focus:ring-2 ${
-                    isInternalNote
+                    currentConv.status !== 'human_active' && !isInternalNote
+                      ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                      : isInternalNote
                       ? 'bg-amber-50 border-amber-300 focus:ring-amber-500'
                       : 'bg-slate-50 border-slate-200 focus:ring-orange-500'
                   }`}
@@ -567,7 +622,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
                   type="submit"
                   variant={isInternalNote ? 'secondary' : 'primary'}
                   size="sm"
-                  disabled={!inputText.trim()}
+                  disabled={!inputText.trim() || (currentConv.status !== 'human_active' && !isInternalNote)}
                   rightIcon={<Send className="w-4 h-4" />}
                 >
                   {isInternalNote ? 'Guardar Nota' : 'Enviar'}

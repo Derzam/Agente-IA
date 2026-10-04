@@ -85,19 +85,37 @@ export function usePolling({
         clearTimer();
         activeAbortControllerRef.current?.abort();
       } else {
-        // Tab gained focus: resume polling immediately
+        // Tab gained focus / became visible: resume polling immediately
         consecutiveNetworkErrorsRef.current = 0;
         backoffDelayRef.current = null;
+        clearTimer();
         executeTick();
       }
     };
 
+    const handleWindowBlur = () => {
+      clearTimer();
+      activeAbortControllerRef.current?.abort();
+    };
+
+    const handleWindowFocus = () => {
+      if (document.hidden) return;
+      consecutiveNetworkErrorsRef.current = 0;
+      backoffDelayRef.current = null;
+      clearTimer();
+      executeTick();
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('focus', handleWindowFocus);
 
     return () => {
       clearTimer();
       activeAbortControllerRef.current?.abort();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
+      window.removeEventListener('focus', handleWindowFocus);
     };
   }, [enabled, executeTick, clearTimer]);
 }

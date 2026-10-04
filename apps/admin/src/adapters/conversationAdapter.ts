@@ -39,6 +39,7 @@ export function mapDtoMessageToViewModel(dto: DTOMessage): ViewModelChatMessage 
     content: dto.text || (dto.kind === 'location' ? '📍 Ubicación compartida' : ''),
     timestamp: dto.created_at,
     isInternalNote: false,
+    deliveryStatus: dto.delivery_status,
   };
 }
 
