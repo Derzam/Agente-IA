@@ -342,6 +342,100 @@ export const SettingsView: React.FC = () => {
                 </div>
               </div>
 
+              {/* Explicit tax policy */}
+              <div className="p-4 border border-slate-200 rounded-xl bg-white space-y-3">
+                <div>
+                  <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">
+                    Política fiscal
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Debe configurarse explícitamente. El sistema no infiere IVA ni otra tasa por país.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Tratamiento del impuesto
+                    </label>
+                    <select
+                      value={businessSettings.taxPolicy?.mode || 'unconfigured'}
+                      onChange={(e) => {
+                        const mode = e.target.value;
+                        setBusinessSettings({
+                          ...businessSettings,
+                          taxPolicy:
+                            mode === 'unconfigured'
+                              ? null
+                              : mode === 'none'
+                              ? { mode: 'none', rateBps: 0, rounding: 'per_line_half_up' }
+                              : {
+                                  mode: 'exclusive',
+                                  rateBps:
+                                    businessSettings.taxPolicy?.mode === 'exclusive'
+                                      ? businessSettings.taxPolicy.rateBps
+                                      : 0,
+                                  rounding: 'per_line_half_up',
+                                },
+                        });
+                      }}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                    >
+                      <option value="unconfigured">Sin configurar</option>
+                      <option value="none">Sin impuesto (0%)</option>
+                      <option value="exclusive">Tasa explícita</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Tasa (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      disabled={businessSettings.taxPolicy?.mode !== 'exclusive'}
+                      value={
+                        businessSettings.taxPolicy?.mode === 'exclusive'
+                          ? businessSettings.taxPolicy.rateBps / 100
+                          : 0
+                      }
+                      onChange={(e) => {
+                        const percent = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                        setBusinessSettings({
+                          ...businessSettings,
+                          taxPolicy: {
+                            mode: 'exclusive',
+                            rateBps: Math.round(percent * 100),
+                            rounding: 'per_line_half_up',
+                          },
+                        });
+                      }}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg disabled:bg-slate-100 disabled:text-slate-400 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Se guarda como puntos base y el cálculo lo realiza exclusivamente el backend.
+                    </p>
+                  </div>
+                </div>
+
+                {businessSettings.taxPolicy == null ? (
+                  <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    Las cotizaciones permanecerán bloqueadas hasta definir una política fiscal explícita.
+                  </div>
+                ) : businessSettings.taxPolicy.mode === 'none' ? (
+                  <div className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                    Política activa: sin impuesto (0%).
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-3">
+                    Política activa: tasa explícita de {(businessSettings.taxPolicy.rateBps / 100).toFixed(2)}%.
+                  </div>
+                )}
+              </div>
+
               {/* Hours Matrix */}
               <div>
                 <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider mb-3">
