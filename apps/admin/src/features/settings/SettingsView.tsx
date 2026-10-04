@@ -3,32 +3,47 @@ import {
   Bot,
   Store,
   Bike,
-  Sparkles,
-  Send,
   Save,
   CheckCircle2,
+  Plus,
+  Trash2,
+  Edit2,
+  MapPin,
 } from 'lucide-react';
 import { Button } from '@/components/common/Button';
 import { Switch } from '@/components/common/Switch';
 import { Card, CardHeader, CardBody } from '@/components/common/Card';
 import { Tabs } from '@/components/common/Tabs';
+import { Modal } from '@/components/common/Modal';
+import { VersionConflictNotice } from '@/components/common/VersionConflictNotice';
+import { ApiErrorBanner } from '@/components/common/ApiErrorBanner';
 import { settingsService } from '@/services/settingsService';
+import { deliveryZoneService } from '@/services/deliveryZoneService';
 import { USE_MOCK_DATA } from '@/services/apiClient';
-import { AgentConfig, BusinessSettings, DeliverySettings } from '@/types/viewModels';
+import { AgentConfig, BusinessSettings, DeliveryZone } from '@/types/viewModels';
+import { decimalToMinor } from '@/adapters/moneyAdapter';
+import { VersionConflictError } from '@/api/types';
 
 export const SettingsView: React.FC = () => {
-  const [activeSubTab, setActiveSubTab] = useState<'agent' | 'business' | 'delivery'>('agent');
+  const [activeSubTab, setActiveSubTab] = useState<'agent' | 'business' | 'delivery'>('business');
   const [agentConfig, setAgentConfig] = useState<AgentConfig | null>(null);
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings | null>(null);
-  const [deliverySettings, setDeliverySettings] = useState<DeliverySettings | null>(null);
+  const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([]);
   const [isSavedNotice, setIsSavedNotice] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [conflictError, setConflictError] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<Error | null>(null);
+
+  // Delivery Zone Modal State
+  const [editingZone, setEditingZone] = useState<DeliveryZone | null>(null);
+  const [isZoneModalOpen, setIsZoneModalOpen] = useState(false);
+  const [isNewZone, setIsNewZone] = useState(false);
 
   // Playground state
   const [testInput, setTestInput] = useState('');
   const [testChat, setTestChat] = useState<{ sender: 'user' | 'bot'; text: string; intent?: string }[]>(
     USE_MOCK_DATA
-      ? [{ sender: 'bot', text: '¡Hola! Soy Max en modo de prueba. Escríbeme algo como "Hola", "¿Cuánto cuesta la hamburguesa?" o "Quiero hablar con un humano" para probar mis respuestas.' }]
+      ? [{ sender: 'bot', text: '¡Hola! Soy el asistente en modo de prueba. Escríbeme algo como "Hola", "¿Cuánto cuesta la hamburguesa?" o "Quiero hablar con un humano".' }]
       : []
   );
 
@@ -38,15 +53,23 @@ export const SettingsView: React.FC = () => {
 
   const loadSettings = async () => {
     setIsLoading(true);
+    setConflictError(null);
+    setApiError(null);
     try {
-      const [agent, biz, del] = await Promise.all([
+      const [agent, biz, zones] = await Promise.all([
         settingsService.getAgentConfig(),
         settingsService.getBusinessSettings(),
-        settingsService.getDeliverySettings(),
+        deliveryZoneService.getDeliveryZones(),
       ]);
       setAgentConfig(agent);
       setBusinessSettings(biz);
-      setDeliverySettings(del);
+      setDeliveryZones(zones);
+    } catch (err: any) {
+      if (err instanceof VersionConflictError) {
+        setConflictError(err.message);
+      } else {
+        setApiError(err);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -55,26 +78,39 @@ export const SettingsView: React.FC = () => {
   const handleSaveAgent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!agentConfig) return;
-    const updated = await settingsService.updateAgentConfig(agentConfig);
-    setAgentConfig(updated);
-    showSavedNotification();
+    setConflictError(null);
+    setApiError(null);
+    try {
+      const updated = await settingsService.updateAgentConfig(agentConfig);
+      setAgentConfig(updated);
+      showSavedNotification();
+    } catch (err: any) {
+      if (err instanceof VersionConflictError) {
+        setConflictError(err.message);
+        await loadSettings();
+      } else {
+        setApiError(err);
+      }
+    }
   };
 
   const handleSaveBusiness = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!businessSettings) return;
-    const updated = await settingsService.updateBusinessSettings(businessSettings);
-    setBusinessSettings(updated);
-    showSavedNotification();
-  };
-
-  const handleSaveDelivery = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!deliverySettings) return;
-    if (!USE_MOCK_DATA) return;
-    const updated = await settingsService.updateDeliverySettings(deliverySettings);
-    setDeliverySettings(updated);
-    showSavedNotification();
+    setConflictError(null);
+    setApiError(null);
+    try {
+      const updated = await settingsService.updateBusinessSettings(businessSettings);
+      setBusinessSettings(updated);
+      showSavedNotification();
+    } catch (err: any) {
+      if (err instanceof VersionConflictError) {
+        setConflictError(err.message);
+        await loadSettings();
+      } else {
+        setApiError(err);
+      }
+    }
   };
 
   const showSavedNotification = () => {
@@ -95,7 +131,115 @@ export const SettingsView: React.FC = () => {
     setTestChat((prev) => [...prev, { sender: 'bot', text: res.reply, intent: res.intent }]);
   };
 
-  if (isLoading || !agentConfig || !businessSettings || !deliverySettings) {
+  // ==========================================
+  // DELIVERY ZONES ACTIONS
+  // ==========================================
+  const handleOpenNewZone = () => {
+    setEditingZone({
+      id: `zone-${Date.now()}`,
+      name: '',
+      fee: 2.0,
+      feeMinor: 200,
+      minOrder: 5.0,
+      minOrderMinor: 500,
+      priority: deliveryZones.length + 1,
+      active: true,
+      version: 1,
+      polygonGeojson: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [-77.035, -12.122],
+            [-77.028, -12.12],
+            [-77.025, -12.128],
+            [-77.033, -12.13],
+            [-77.035, -12.122],
+          ],
+        ],
+      },
+    });
+    setIsNewZone(true);
+    setIsZoneModalOpen(true);
+  };
+
+  const handleSaveZone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingZone) return;
+    setConflictError(null);
+    setApiError(null);
+
+    try {
+      if (isNewZone) {
+        const created = await deliveryZoneService.createDeliveryZone({
+          name: editingZone.name,
+          fee: editingZone.fee,
+          feeMinor: decimalToMinor(editingZone.fee),
+          minOrder: editingZone.minOrder,
+          minOrderMinor: decimalToMinor(editingZone.minOrder),
+          priority: editingZone.priority,
+          active: editingZone.active,
+          polygonGeojson: editingZone.polygonGeojson,
+        });
+        setDeliveryZones((prev) => [...prev, created].sort((a, b) => a.priority - b.priority));
+      } else {
+        const updated = await deliveryZoneService.updateDeliveryZone({
+          ...editingZone,
+          feeMinor: decimalToMinor(editingZone.fee),
+          minOrderMinor: decimalToMinor(editingZone.minOrder),
+        });
+        setDeliveryZones((prev) =>
+          prev.map((z) => (z.id === updated.id ? updated : z)).sort((a, b) => a.priority - b.priority)
+        );
+      }
+      setIsZoneModalOpen(false);
+      setEditingZone(null);
+      showSavedNotification();
+    } catch (err: any) {
+      if (err instanceof VersionConflictError) {
+        setConflictError(err.message);
+        await loadSettings();
+      } else {
+        setApiError(err);
+      }
+    }
+  };
+
+  const handleDeleteZone = async (zone: DeliveryZone) => {
+    setConflictError(null);
+    setApiError(null);
+    try {
+      await deliveryZoneService.deleteDeliveryZone(zone.id, zone.version || 1);
+      setDeliveryZones((prev) => prev.filter((z) => z.id !== zone.id));
+      showSavedNotification();
+    } catch (err: any) {
+      if (err instanceof VersionConflictError) {
+        setConflictError(err.message);
+        await loadSettings();
+      } else {
+        setApiError(err);
+      }
+    }
+  };
+
+  const handleToggleZoneActive = async (zone: DeliveryZone) => {
+    setConflictError(null);
+    setApiError(null);
+    try {
+      const updated = await deliveryZoneService.toggleActive(zone.id, !zone.active, zone.version || 1);
+      setDeliveryZones((prev) =>
+        prev.map((z) => (z.id === updated.id ? updated : z)).sort((a, b) => a.priority - b.priority)
+      );
+    } catch (err: any) {
+      if (err instanceof VersionConflictError) {
+        setConflictError(err.message);
+        await loadSettings();
+      } else {
+        setApiError(err);
+      }
+    }
+  };
+
+  if (isLoading || !businessSettings) {
     return (
       <div className="p-6 space-y-4">
         <div className="h-64 bg-white rounded-xl border border-slate-200 animate-pulse" />
@@ -105,12 +249,28 @@ export const SettingsView: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
+      {/* Conflict Notice */}
+      {conflictError && (
+        <VersionConflictNotice
+          message={conflictError}
+          onRefresh={loadSettings}
+        />
+      )}
+
+      {/* API Error Banner */}
+      {apiError && (
+        <ApiErrorBanner
+          error={apiError}
+          onRetry={loadSettings}
+        />
+      )}
+
       {/* Sub Tabs */}
       <Tabs
         tabs={[
-          { id: 'agent', label: 'Asistente IA de WhatsApp', icon: <Bot className="w-4 h-4 text-sky-600" /> },
-          { id: 'business', label: 'Datos del Local & Horarios', icon: <Store className="w-4 h-4 text-orange-600" /> },
-          { id: 'delivery', label: 'Zonas y Tarifas de Delivery', icon: <Bike className="w-4 h-4 text-indigo-600" /> },
+          { id: 'business', label: 'Configuración & Horarios', icon: <Store className="w-4 h-4 text-orange-600" /> },
+          { id: 'delivery', label: 'Zonas de Entrega', icon: <Bike className="w-4 h-4 text-indigo-600" /> },
+          { id: 'agent', label: 'Asistente IA WhatsApp', icon: <Bot className="w-4 h-4 text-sky-600" /> },
         ]}
         activeTab={activeSubTab}
         onChange={(tabId) => setActiveSubTab(tabId as any)}
@@ -119,285 +279,112 @@ export const SettingsView: React.FC = () => {
       {isSavedNotice && (
         <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-800 text-xs font-bold flex items-center gap-2 animate-fadeIn">
           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          {USE_MOCK_DATA ? 'Configuración de demostración actualizada.' : 'Configuración soportada por el backend actualizada con éxito.'}
+          Configuración guardada correctamente en el sistema.
         </div>
       )}
 
-      {/* TAB 1: AGENT SETTINGS & PLAYGROUND */}
-      {activeSubTab === 'agent' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Agent Configuration Form (7 cols) */}
-          <div className="lg:col-span-7 space-y-6">
-            <Card>
-              <CardHeader
-                title="Personalidad & Reglas del Asistente Virtual"
-                subtitle="Ajusta cómo responde la IA a los clientes de WhatsApp sin tocar código backend"
-              />
-              <CardBody>
-                <form onSubmit={handleSaveAgent} className="space-y-5 text-xs sm:text-sm">
-                  {/* Master Switch */}
-                  <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
-                    <div>
-                      <p className="font-bold text-slate-900">Activar Asistente de IA en WhatsApp</p>
-                      <p className="text-xs text-slate-500">
-                        Si se apaga, todos los mensajes entrantes requerirán atención humana manual.
-                      </p>
-                    </div>
-                    <Switch
-                      checked={agentConfig.isEnabled}
-                      onChange={(checked) => setAgentConfig({ ...agentConfig, isEnabled: checked })}
-                    />
-                  </div>
-
-                  {/* Name and Tone */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">
-                        Nombre del Asistente:
-                      </label>
-                      <input
-                        type="text"
-                        value={agentConfig.assistantName}
-                        disabled={!USE_MOCK_DATA}
-                        onChange={(e) =>
-                          setAgentConfig({ ...agentConfig, assistantName: e.target.value })
-                        }
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Tono de Voz:</label>
-                      <select
-                        value={agentConfig.tone}
-                        disabled={!USE_MOCK_DATA}
-                        onChange={(e) =>
-                          setAgentConfig({ ...agentConfig, tone: e.target.value as any })
-                        }
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
-                      >
-                        <option value="friendly_casual">Amigable, cálido y cercano (Recomendado)</option>
-                        <option value="formal_polite">Formal, sobrio y educado</option>
-                        <option value="energetic_youthful">Enérgico, divertido y juvenil</option>
-                        <option value="unavailable">No disponible en API real</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Welcome Greeting */}
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Saludo Inicial de Bienvenida:
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={agentConfig.welcomeGreeting}
-                        disabled={!USE_MOCK_DATA}
-                      onChange={(e) =>
-                        setAgentConfig({ ...agentConfig, welcomeGreeting: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
-                    />
-                  </div>
-
-                  {/* Outside Hours Message */}
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Mensaje Fuera de Horario / Local Cerrado:
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={agentConfig.outsideHoursMessage}
-                        disabled={!USE_MOCK_DATA}
-                      onChange={(e) =>
-                        setAgentConfig({ ...agentConfig, outsideHoursMessage: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
-                    />
-                  </div>
-
-                  {/* Handoff Message */}
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Mensaje al Transferir a Humano:
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={agentConfig.handoffToHumanMessage}
-                        disabled={!USE_MOCK_DATA}
-                      onChange={(e) =>
-                        setAgentConfig({ ...agentConfig, handoffToHumanMessage: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
-                    />
-                  </div>
-
-                  {/* Handoff Keywords */}
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Palabras Clave de Transferencia Inmediata:
-                    </label>
-                    <input
-                      type="text"
-                      value={agentConfig.handoffKeywords.join(', ')}
-                        disabled={!USE_MOCK_DATA}
-                      onChange={(e) =>
-                        setAgentConfig({
-                          ...agentConfig,
-                          handoffKeywords: e.target.value.split(',').map((s) => s.trim()),
-                        })
-                      }
-                      placeholder="humano, persona, asesor, queja, reclamo"
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
-                    />
-                    <p className="text-[11px] text-slate-500 mt-1">
-                      Separadas por comas. Si un cliente escribe cualquiera de estas palabras, la IA pausará y transferirá.
-                    </p>
-                  </div>
-
-                  {/* System Directives */}
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Directivas de Venta & Negocio para la IA:
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={agentConfig.systemDirectives}
-                        disabled={!USE_MOCK_DATA}
-                      onChange={(e) =>
-                        setAgentConfig({ ...agentConfig, systemDirectives: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
-                    />
-                  </div>
-
-                  {!USE_MOCK_DATA && (
-                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                      En modo real solo se persiste el interruptor de activación de IA. Nombre, tono, mensajes, palabras clave y directivas aún no existen en OpenAPI.
-                    </p>
-                  )}
-
-                  <div className="pt-3 border-t border-slate-100 flex justify-end">
-                    <Button variant="primary" size="md" type="submit" leftIcon={<Save className="w-4 h-4" />}>
-                      {USE_MOCK_DATA ? 'Guardar Configuración de IA' : 'Guardar activación de IA'}
-                    </Button>
-                  </div>
-                </form>
-              </CardBody>
-            </Card>
-          </div>
-
-          {/* Interactive Playground Simulator (5 cols) */}
-          <div className="lg:col-span-5 space-y-4">
-            <Card className="h-full flex flex-col">
-              <CardHeader
-                title={
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-orange-500" />
-                    <span>Simulador de Pruebas</span>
-                  </div>
-                }
-                subtitle={USE_MOCK_DATA ? 'Chatea con el asistente simulado sin enviar WhatsApp' : 'No disponible en modo real hasta existir un endpoint de prueba'}
-              />
-              <CardBody className="p-3 flex-1 flex flex-col justify-between bg-slate-50">
-                {/* Messages Timeline */}
-                <div className="space-y-3 overflow-y-auto max-h-[440px] p-2 flex-1">
-                  {testChat.map((msg, i) => (
-                    <div
-                      key={i}
-                      className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
-                    >
-                      <div
-                        className={`max-w-[85%] p-3 rounded-2xl text-xs leading-relaxed ${
-                          msg.sender === 'user'
-                            ? 'bg-orange-600 text-white rounded-tr-xs'
-                            : 'bg-white border border-slate-200 text-slate-800 rounded-tl-xs shadow-2xs'
-                        }`}
-                      >
-                        <p>{msg.text}</p>
-                      </div>
-                      {msg.intent && (
-                        <span className="text-[10px] text-slate-400 mt-1 px-1">
-                          Intención: <code className="bg-slate-200/80 px-1 py-0.5 rounded text-slate-700">{msg.intent}</code>
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Input for testing */}
-                <form onSubmit={handleSendTestMessage} className="mt-3 pt-3 border-t border-slate-200 flex gap-2">
-                  <input
-                    type="text"
-                    value={testInput}
-                    onChange={(e) => setTestInput(e.target.value)}
-                    placeholder={USE_MOCK_DATA ? 'Escribe un mensaje de prueba...' : 'Simulador no disponible en modo real'}
-                    disabled={!USE_MOCK_DATA}
-                    className="flex-1 text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  />
-                  <Button type="submit" variant="primary" size="sm" disabled={!USE_MOCK_DATA || !testInput.trim()}>
-                    <Send className="w-3.5 h-3.5" />
-                  </Button>
-                </form>
-              </CardBody>
-            </Card>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: BUSINESS & HOURS */}
+      {/* ========================================== */}
+      {/* TAB 1: BUSINESS & HOURS                   */}
+      {/* ========================================== */}
       {activeSubTab === 'business' && (
-        <Card className="max-w-3xl">
-          <CardHeader title="Información General & Horarios de Atención" />
+        <Card className="max-w-4xl">
+          <CardHeader
+            title="Configuración General del Negocio"
+            subtitle="Reglas operativas, canales de atención y horarios oficiales para pedidos"
+          />
           <CardBody>
             <form onSubmit={handleSaveBusiness} className="space-y-6 text-xs sm:text-sm">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Nombre Comercial:</label>
-                  <input
-                    type="text"
-                    value={businessSettings.name}
-                    disabled={!USE_MOCK_DATA}
-                    onChange={(e) =>
-                      setBusinessSettings({ ...businessSettings, name: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Teléfono de Soporte:</label>
-                  <input
-                    type="text"
-                    value={businessSettings.supportPhone}
-                    disabled={!USE_MOCK_DATA}
-                    placeholder={!USE_MOCK_DATA ? 'No disponible en contrato actual' : undefined}
-                    onChange={(e) =>
-                      setBusinessSettings({ ...businessSettings, supportPhone: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Dirección del Local:</label>
-                <input
-                  type="text"
-                  value={businessSettings.address}
-                  disabled={!USE_MOCK_DATA}
-                  placeholder={!USE_MOCK_DATA ? 'No disponible en contrato actual' : undefined}
-                  onChange={(e) =>
-                    setBusinessSettings({ ...businessSettings, address: e.target.value })
+              {/* Canonical Channel & Operational Switches */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                <Switch
+                  checked={businessSettings.isAcceptingOrders}
+                  onChange={(checked) =>
+                    setBusinessSettings({ ...businessSettings, isAcceptingOrders: checked })
                   }
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500"
+                  label="Recepción de Pedidos Abierta (Master)"
+                  description="Si se desactiva, el negocio cierra temporalmente para nuevos pedidos."
+                  size="md"
+                />
+
+                <Switch
+                  checked={businessSettings.aiEnabled}
+                  onChange={(checked) =>
+                    setBusinessSettings({ ...businessSettings, aiEnabled: checked })
+                  }
+                  label="Automatización de IA Activa"
+                  description="Permite que el bot atienda y procese pedidos por WhatsApp."
+                  size="md"
+                />
+
+                <Switch
+                  checked={businessSettings.deliveryEnabled}
+                  onChange={(checked) =>
+                    setBusinessSettings({ ...businessSettings, deliveryEnabled: checked })
+                  }
+                  label="Servicio a Domicilio (Delivery)"
+                  description="Habilita la opción de entrega a domicilio para clientes."
+                  size="sm"
+                />
+
+                <Switch
+                  checked={businessSettings.pickupEnabled}
+                  onChange={(checked) =>
+                    setBusinessSettings({ ...businessSettings, pickupEnabled: checked })
+                  }
+                  label="Retiro en Tienda (Pickup)"
+                  description="Habilita que los clientes recojan sus pedidos en el local."
+                  size="sm"
                 />
               </div>
 
-              {!USE_MOCK_DATA && (
-                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  En modo real esta pantalla solo guarda horarios y recepción de pedidos. Nombre comercial, teléfono y dirección requieren contratos adicionales.
-                </p>
-              )}
+              {/* Order Parameters */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Pedido Mínimo ($ USD):
+                  </label>
+                  <input
+                    type="number"
+                    step="0.50"
+                    min="0"
+                    value={businessSettings.minOrder}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value) || 0;
+                      setBusinessSettings({
+                        ...businessSettings,
+                        minOrder: val,
+                        minOrderMinor: decimalToMinor(val),
+                      });
+                    }}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Valor canónico: {businessSettings.minOrderMinor} minor units (centavos).
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    TTL de Sesión de Chat (minutos):
+                  </label>
+                  <input
+                    type="number"
+                    min="5"
+                    max="1440"
+                    value={businessSettings.sessionTtlMinutes}
+                    onChange={(e) =>
+                      setBusinessSettings({
+                        ...businessSettings,
+                        sessionTtlMinutes: parseInt(e.target.value, 10) || 60,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Tiempo de inactividad antes de expirar una conversación de WhatsApp.
+                  </p>
+                </div>
+              </div>
 
               {/* Hours Matrix */}
               <div>
@@ -450,9 +437,12 @@ export const SettingsView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex justify-end">
+              <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
+                <span className="text-xs text-slate-400">
+                  Versión actual: {businessSettings.version ?? 1}
+                </span>
                 <Button variant="primary" size="md" type="submit" leftIcon={<Save className="w-4 h-4" />}>
-                  Guardar Horarios
+                  Guardar Configuración
                 </Button>
               </div>
             </form>
@@ -460,108 +450,331 @@ export const SettingsView: React.FC = () => {
         </Card>
       )}
 
-      {/* TAB 3: DELIVERY SETTINGS */}
+      {/* ========================================== */}
+      {/* TAB 2: DELIVERY ZONES                     */}
+      {/* ========================================== */}
       {activeSubTab === 'delivery' && (
-        <Card className="max-w-2xl">
-          <CardHeader
-            title="Parámetros de Reparto & Cobertura"
-            subtitle="Define el radio de acción y cómo calcula el backend el costo de envío para la IA"
-          />
-          <CardBody>
-            {!USE_MOCK_DATA && (
-              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-                Radio, tarifa base, tarifa por km y tiempos estimados todavía no existen en el contrato real. Estos campos están deshabilitados para evitar una falsa persistencia.
-              </p>
-            )}
-            <form onSubmit={handleSaveDelivery} className="space-y-4 text-xs sm:text-sm">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Radio Máximo de Cobertura (km):
-                  </label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={deliverySettings.maxCoverageRadiusKm ?? ''}
-                    disabled={!USE_MOCK_DATA}
-                    onChange={(e) =>
-                      setDeliverySettings({
-                        ...deliverySettings,
-                        maxCoverageRadiusKm: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500"
-                  />
-                  <p className="text-[11px] text-slate-400 mt-1">Más allá de esta distancia, la IA activa el Flujo O (fuera de zona).</p>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Costo Base de Envío ($ USD):
-                  </label>
-                  <input
-                    type="number"
-                    step="0.25"
-                    value={deliverySettings.baseDeliveryFee ?? ''}
-                    disabled={!USE_MOCK_DATA}
-                    onChange={(e) =>
-                      setDeliverySettings({
-                        ...deliverySettings,
-                        baseDeliveryFee: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Tiempo Estimado de Cocina (min):
-                  </label>
-                  <input
-                    type="number"
-                    value={deliverySettings.estimatedPrepTimeMin ?? ''}
-                    disabled={!USE_MOCK_DATA}
-                    onChange={(e) =>
-                      setDeliverySettings({
-                        ...deliverySettings,
-                        estimatedPrepTimeMin: parseInt(e.target.value) || 0,
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Tiempo de Reparto en Ruta (min):
-                  </label>
-                  <input
-                    type="number"
-                    value={deliverySettings.estimatedTransitTimeMin ?? ''}
-                    disabled={!USE_MOCK_DATA}
-                    onChange={(e) =>
-                      setDeliverySettings({
-                        ...deliverySettings,
-                        estimatedTransitTimeMin: parseInt(e.target.value) || 0,
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex justify-end">
-                <Button variant="primary" size="md" type="submit" disabled={!USE_MOCK_DATA} leftIcon={<Save className="w-4 h-4" />}>
-                  {USE_MOCK_DATA ? 'Guardar Configuración de Delivery' : 'No disponible en modo real'}
+        <div className="space-y-6 max-w-5xl">
+          <Card>
+            <CardHeader
+              title="Zonas de Entrega & Tarifas Oficiales"
+              subtitle="Administración de polígonos GeoJSON, tarifas por zona y prioridades de cobertura"
+              action={
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleOpenNewZone}
+                  leftIcon={<Plus className="w-4 h-4" />}
+                >
+                  Nueva Zona de Entrega
                 </Button>
-              </div>
-            </form>
-          </CardBody>
-        </Card>
+              }
+            />
+            <CardBody>
+              {deliveryZones.length === 0 ? (
+                <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 text-xs">
+                  <MapPin className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                  <p className="font-bold text-sm text-slate-600">No hay zonas de entrega configuradas</p>
+                  <p className="mt-1">Agregue zonas con tarifas y pedidos mínimos para calcular el costo de envío.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+                  {deliveryZones.map((zone) => (
+                    <div
+                      key={zone.id}
+                      className="p-4 bg-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs hover:bg-slate-50 transition-colors"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
+                            Prioridad: {zone.priority}
+                          </span>
+                          <h4 className="font-bold text-slate-900 text-sm">{zone.name}</h4>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              zone.active
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {zone.active ? 'Activa' : 'Inactiva'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-4 text-slate-500 pt-1">
+                          <span>
+                            Tarifa de Envío: <strong className="text-slate-800">${zone.fee.toFixed(2)}</strong> ({zone.feeMinor} minor)
+                          </span>
+                          <span>
+                            Pedido Mínimo: <strong className="text-slate-800">${zone.minOrder.toFixed(2)}</strong> ({zone.minOrderMinor} minor)
+                          </span>
+                        </div>
+
+                        {zone.polygonGeojson && (
+                          <div className="pt-1 text-[11px] text-slate-400 flex items-center gap-1 font-mono">
+                            <span className="font-semibold text-slate-500">GeoJSON:</span>
+                            <span>{zone.polygonGeojson.coordinates[0]?.length || 0} vértices poligonales registrados</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Switch
+                          checked={zone.active}
+                          onChange={() => handleToggleZoneActive(zone)}
+                          size="sm"
+                        />
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setEditingZone({ ...zone });
+                            setIsNewZone(false);
+                            setIsZoneModalOpen(true);
+                          }}
+                          leftIcon={<Edit2 className="w-3.5 h-3.5 text-slate-500" />}
+                        >
+                          Editar
+                        </Button>
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteZone(zone)}
+                          className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardBody>
+          </Card>
+        </div>
       )}
+
+      {/* ========================================== */}
+      {/* TAB 3: AGENT SETTINGS & PLAYGROUND        */}
+      {/* ========================================== */}
+      {activeSubTab === 'agent' && agentConfig && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-7 space-y-6">
+            <Card>
+              <CardHeader
+                title="Configuración de Respuestas Automáticas"
+                subtitle="Parámetros de conversación del asistente"
+              />
+              <CardBody>
+                <form onSubmit={handleSaveAgent} className="space-y-5 text-xs sm:text-sm">
+                  <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-slate-900">Asistente Activo</h4>
+                      <p className="text-xs text-slate-500 mt-0.5">Controla la automatización</p>
+                    </div>
+                    <Switch
+                      checked={agentConfig.isEnabled}
+                      onChange={(checked) => setAgentConfig({ ...agentConfig, isEnabled: checked })}
+                      size="md"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Nombre del Asistente:</label>
+                    <input
+                      type="text"
+                      value={agentConfig.assistantName}
+                      onChange={(e) => setAgentConfig({ ...agentConfig, assistantName: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Mensaje de Bienvenida:</label>
+                    <textarea
+                      rows={2}
+                      value={agentConfig.welcomeGreeting}
+                      onChange={(e) => setAgentConfig({ ...agentConfig, welcomeGreeting: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Mensaje Fuera de Horario:</label>
+                    <textarea
+                      rows={2}
+                      value={agentConfig.outsideHoursMessage}
+                      onChange={(e) => setAgentConfig({ ...agentConfig, outsideHoursMessage: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 flex justify-end">
+                    <Button variant="primary" size="md" type="submit" leftIcon={<Save className="w-4 h-4" />}>
+                      Guardar Configuración
+                    </Button>
+                  </div>
+                </form>
+              </CardBody>
+            </Card>
+          </div>
+
+          <div className="lg:col-span-5 space-y-4">
+            <Card>
+              <CardHeader title="Simulador de Respuestas" subtitle="Prueba de mensajes de clientes" />
+              <CardBody>
+                <div className="space-y-3">
+                  <div className="h-64 overflow-y-auto space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+                    {testChat.map((m, i) => (
+                      <div key={i} className={`flex ${m.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div
+                          className={`max-w-[85%] p-2.5 rounded-xl ${
+                            m.sender === 'user' ? 'bg-orange-600 text-white' : 'bg-white border border-slate-200 text-slate-800'
+                          }`}
+                        >
+                          <p>{m.text}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <form onSubmit={handleSendTestMessage} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={testInput}
+                      onChange={(e) => setTestInput(e.target.value)}
+                      placeholder="Escribe un mensaje de prueba..."
+                      className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none"
+                    />
+                    <Button variant="primary" size="sm" type="submit">
+                      Enviar
+                    </Button>
+                  </form>
+                </div>
+              </CardBody>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================== */}
+      {/* DELIVERY ZONE MODAL                        */}
+      {/* ========================================== */}
+      <Modal
+        isOpen={isZoneModalOpen}
+        onClose={() => setIsZoneModalOpen(false)}
+        title={isNewZone ? 'Crear Nueva Zona de Entrega' : `Editar Zona "${editingZone?.name}"`}
+        maxWidth="md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setIsZoneModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleSaveZone}>
+              Guardar Zona
+            </Button>
+          </div>
+        }
+      >
+        {editingZone && (
+          <form onSubmit={handleSaveZone} className="space-y-4 text-xs sm:text-sm">
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Nombre de la Zona:</label>
+              <input
+                type="text"
+                value={editingZone.name}
+                onChange={(e) => setEditingZone({ ...editingZone, name: e.target.value })}
+                placeholder="ej. Zona Centro, Miraflores, Norte Express..."
+                required
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Tarifa Envío ($):</label>
+                <input
+                  type="number"
+                  step="0.25"
+                  min="0"
+                  value={editingZone.fee}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value) || 0;
+                    setEditingZone({
+                      ...editingZone,
+                      fee: val,
+                      feeMinor: decimalToMinor(val),
+                    });
+                  }}
+                  required
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Pedido Mín. ($):</label>
+                <input
+                  type="number"
+                  step="0.50"
+                  min="0"
+                  value={editingZone.minOrder}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value) || 0;
+                    setEditingZone({
+                      ...editingZone,
+                      minOrder: val,
+                      minOrderMinor: decimalToMinor(val),
+                    });
+                  }}
+                  required
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Prioridad:</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={editingZone.priority}
+                  onChange={(e) =>
+                    setEditingZone({ ...editingZone, priority: parseInt(e.target.value, 10) || 1 })
+                  }
+                  required
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100">
+              <Switch
+                checked={editingZone.active}
+                onChange={(active) => setEditingZone({ ...editingZone, active })}
+                label="Zona Activa"
+                description="Si se desactiva, los pedidos hacia esta zona serán rechazados."
+              />
+            </div>
+
+            {/* Structured Coordinates Placeholder */}
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">
+                Polígono de Cobertura (GeoJSON Estructurado):
+              </label>
+              <textarea
+                rows={4}
+                value={JSON.stringify(editingZone.polygonGeojson, null, 2)}
+                readOnly
+                className="w-full px-3 py-2 font-mono text-[11px] bg-slate-50 border border-slate-200 rounded-lg text-slate-600 focus:outline-none"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">
+                El polígono GeoJSON define los límites geográficos exactos validados por el backend en el checkout.
+              </p>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 };

@@ -59,6 +59,11 @@ export const settingsService = {
       {
         expected_version: version,
         accepting_orders: settings.isAcceptingOrders,
+        delivery_enabled: settings.deliveryEnabled,
+        pickup_enabled: settings.pickupEnabled,
+        min_order_minor: settings.minOrderMinor,
+        session_ttl_minutes: settings.sessionTtlMinutes,
+        ai_enabled: settings.aiEnabled,
         opening_hours: mapViewModelHoursToOpeningIntervals(settings.hours),
       },
       key,

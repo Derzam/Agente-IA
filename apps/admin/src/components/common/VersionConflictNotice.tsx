@@ -10,7 +10,7 @@ interface VersionConflictNoticeProps {
 
 export const VersionConflictNotice: React.FC<VersionConflictNoticeProps> = ({
   onRefresh,
-  message = 'Este registro cambió. Revisa la nueva información antes de volver a ejecutar la acción.',
+  message = 'El registro cambió. Actualiza la información antes de continuar.',
   className = '',
 }) => {
   return (

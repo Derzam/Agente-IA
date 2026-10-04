@@ -21,6 +21,8 @@ import type {
   BusinessDayHours,
 } from '@/types/viewModels';
 
+import { minorToDecimal, decimalToMinor } from './moneyAdapter';
+
 const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
 export function mapOpeningHoursToViewModel(intervals: OpeningInterval[] = []): BusinessDayHours[] {
@@ -55,12 +57,19 @@ export function mapDtoToViewModelBusinessSettings(
   business?: DTOBusiness | null
 ): ViewModelBusinessSettings {
   return {
+    version: settings.version,
     name: business?.name || 'Mi Negocio',
     legalName: business?.name,
     supportPhone: '',
     address: '',
     currencySymbol: business?.currency === 'USD' ? '$' : business?.currency || '$',
     isAcceptingOrders: settings.accepting_orders,
+    deliveryEnabled: settings.delivery_enabled ?? true,
+    pickupEnabled: settings.pickup_enabled ?? true,
+    minOrderMinor: settings.min_order_minor ?? 0,
+    minOrder: minorToDecimal(settings.min_order_minor ?? 0),
+    sessionTtlMinutes: settings.session_ttl_minutes ?? 60,
+    aiEnabled: settings.ai_enabled ?? false,
     hours: mapOpeningHoursToViewModel(settings.opening_hours),
   };
 }
@@ -108,12 +117,32 @@ export function buildSettingsUpdatePayload(
     update.accepting_orders = changes.isAcceptingOrders;
   }
 
-  if (changes.hours !== undefined) {
-    update.opening_hours = mapViewModelHoursToOpeningIntervals(changes.hours);
+  if (changes.deliveryEnabled !== undefined) {
+    update.delivery_enabled = changes.deliveryEnabled;
   }
 
-  if (changes.ai_enabled !== undefined) {
+  if (changes.pickupEnabled !== undefined) {
+    update.pickup_enabled = changes.pickupEnabled;
+  }
+
+  if (changes.minOrderMinor !== undefined) {
+    update.min_order_minor = changes.minOrderMinor;
+  } else if (changes.minOrder !== undefined) {
+    update.min_order_minor = decimalToMinor(changes.minOrder);
+  }
+
+  if (changes.sessionTtlMinutes !== undefined) {
+    update.session_ttl_minutes = changes.sessionTtlMinutes;
+  }
+
+  if (changes.aiEnabled !== undefined) {
+    update.ai_enabled = changes.aiEnabled;
+  } else if (changes.ai_enabled !== undefined) {
     update.ai_enabled = changes.ai_enabled;
+  }
+
+  if (changes.hours !== undefined) {
+    update.opening_hours = mapViewModelHoursToOpeningIntervals(changes.hours);
   }
 
   return update;
