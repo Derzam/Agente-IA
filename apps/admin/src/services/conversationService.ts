@@ -199,7 +199,8 @@ export const conversationService = {
     conversationId: string,
     operatorUserId: UUID,
     handoffId?: string,
-    expectedVersion = 1
+    expectedConversationVersion = 1,
+    expectedHandoffVersion?: number
   ): Promise<ConversationSummary> {
     if (USE_MOCK_DATA) {
       const index = localConversations.findIndex((c) => c.id === conversationId);
@@ -215,11 +216,16 @@ export const conversationService = {
 
     let targetHandoffId = handoffId;
     if (!targetHandoffId) {
-      const handoff = await this.requestHandoff(conversationId, 'explicit_request', expectedVersion);
+      const handoff = await this.requestHandoff(conversationId, 'explicit_request', expectedConversationVersion);
       targetHandoffId = handoff.id;
+      expectedHandoffVersion = handoff.version;
     }
 
-    await this.claimHandoff(targetHandoffId, operatorUserId, expectedVersion);
+    if (expectedHandoffVersion === undefined) {
+      throw new Error('No se dispone de la versión actual del handoff. Actualiza la conversación antes de tomar el control.');
+    }
+
+    await this.claimHandoff(targetHandoffId, operatorUserId, expectedHandoffVersion);
     const updatedConv = await endpoints.getConversationById(conversationId);
     return mapDtoConversationToViewModel(updatedConv);
   },
@@ -230,7 +236,7 @@ export const conversationService = {
   async returnToBot(
     conversationId: string,
     handoffId?: string,
-    expectedVersion = 1
+    expectedHandoffVersion?: number
   ): Promise<ConversationSummary> {
     if (USE_MOCK_DATA) {
       const index = localConversations.findIndex((c) => c.id === conversationId);
@@ -245,11 +251,14 @@ export const conversationService = {
     }
 
     if (handoffId) {
+      if (expectedHandoffVersion === undefined) {
+        throw new Error('No se dispone de la versión actual del handoff. Actualiza la conversación antes de devolverla al bot.');
+      }
       await this.resolveHandoff(
         handoffId,
         'resume_bot',
         'Atención humana finalizada. Retoma el asistente virtual.',
-        expectedVersion
+        expectedHandoffVersion
       );
     }
 
