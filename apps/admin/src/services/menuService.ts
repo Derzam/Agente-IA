@@ -1,16 +1,59 @@
-import type { MenuItem, MenuItemCategory } from '@/types/viewModels';
+import type { MenuItem, MenuItemCategory, ModifierGroup } from '@/types/viewModels';
+import type { ProductOption as DTOProductOption } from '@agente-ia/shared';
 import { mockMenuItems, mockCategories } from '@/mocks/mockData';
 import { USE_MOCK_DATA, newIdempotencyKey } from './apiClient';
 import { endpoints } from '@/api/endpoints';
 import {
   mapDtoCategoryToViewModel,
   mapDtoProductToViewModel,
+  flattenModifierGroupsForWrite,
 } from '@/adapters/menuAdapter';
 import { decimalToMinor } from '@/adapters/moneyAdapter';
 import type { RequestOptions } from '@/api/types';
 
 let localItems: MenuItem[] = [...mockMenuItems];
 let localCategories: MenuItemCategory[] = [...mockCategories];
+
+export async function syncProductModifiers(
+  productId: string,
+  groups: ModifierGroup[] = [],
+  currentOptions: DTOProductOption[] = [],
+  options?: RequestOptions
+): Promise<void> {
+  const desired = flattenModifierGroupsForWrite(groups);
+  const desiredIds = new Set(desired.map((entry) => entry.clientOptionId));
+  const currentById = new Map(currentOptions.map((option) => [option.id, option]));
+
+  for (const entry of desired) {
+    const existing = currentById.get(entry.clientOptionId);
+    const key = newIdempotencyKey();
+    if (existing) {
+      await endpoints.updateProductOption(
+        productId,
+        existing.id,
+        { ...entry.input, expected_version: existing.version },
+        key,
+        undefined,
+        options
+      );
+    } else {
+      await endpoints.createProductOption(productId, entry.input, key, undefined, options);
+    }
+  }
+
+  for (const existing of currentOptions) {
+    if (!desiredIds.has(existing.id)) {
+      await endpoints.deleteProductOption(
+        productId,
+        existing.id,
+        existing.version,
+        newIdempotencyKey(),
+        undefined,
+        options
+      );
+    }
+  }
+}
 
 export const menuService = {
   // ==========================================
@@ -201,9 +244,9 @@ export const menuService = {
       options
     );
 
-    const vm = mapDtoProductToViewModel(createdDto);
-    vm.modifierGroups = item.modifierGroups;
-    return vm;
+    await syncProductModifiers(createdDto.id, item.modifierGroups || [], [], options);
+    const refreshedDto = await endpoints.getProductById(createdDto.id, undefined, options);
+    return mapDtoProductToViewModel(refreshedDto);
   },
 
   async toggleAvailability(
@@ -264,7 +307,8 @@ export const menuService = {
       return Promise.resolve(item);
     }
 
-    const updatedDto = await endpoints.updateProduct(
+    const currentDto = await endpoints.getProductById(item.id, undefined, options);
+    await endpoints.updateProduct(
       item.id,
       {
         category_id: item.categoryId,
@@ -280,9 +324,9 @@ export const menuService = {
       options
     );
 
-    const vm = mapDtoProductToViewModel(updatedDto);
-    vm.modifierGroups = item.modifierGroups;
-    return vm;
+    await syncProductModifiers(item.id, item.modifierGroups || [], currentDto.options || [], options);
+    const refreshedDto = await endpoints.getProductById(item.id, undefined, options);
+    return mapDtoProductToViewModel(refreshedDto);
   },
 
   async deleteItem(
