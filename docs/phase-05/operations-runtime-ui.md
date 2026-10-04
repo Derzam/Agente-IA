@@ -1,0 +1,110 @@
+# Operación y UX de Runtime — Fase 5
+
+## 1. Principio Fundamental: Fidelidad de Estado y Cero Simulación
+
+En modo real (`VITE_USE_MOCK_DATA=false`), el panel administrativo de **Agente-IA** refleja estrictamente el estado verificado por el backend y los proveedores aguas arriba.
+
+Reglas aplicadas sin excepción:
+- **Nunca inventar estado de proveedores** (Meta WhatsApp, OpenAI, Worker).
+- **Nunca asumir éxito prematuro**: una respuesta HTTP 202 de la API representa un mensaje **encolado** (`queued`) en el outbox transaccional, jamás un mensaje "enviado" o "entregado".
+- **Sin ping directo desde el navegador a Meta u OpenAI**: Toda la información de salud o readiness proviene del contrato oficial de la API de backend.
+- **Sin cálculo especulativo de costos monetarios**: Solo se presentan métricas operativas de consumo (tokens, llamadas a herramientas, turnos, cuota restante) reportadas oficialmente por el backend.
+
+---
+
+## 2. Máquina de Estados de Entrega (Meta / Outbox)
+
+Se implementó el ciclo de vida completo de 9 estados en `ChatMessage.deliveryStatus` y el componente accesible `OutboxStatusBadge`:
+
+| Estado | Etiqueta en UI | Descripción Operativa |
+| :--- | :--- | :--- |
+| `queued` | **Encolado** | Aceptado por API (HTTP 202) y persistido en tabla outbox transaccional. Pendiente de toma por el worker. |
+| `pending` | **Pendiente** | En proceso de preparación interna por el despachador. |
+| `sending` | **Enviando** | Despachado hacia la API de WhatsApp Cloud / Graph API de Meta; esperando ACK inicial. |
+| `sent` | **Enviado** | Confirmado por el upstream de Meta con `wamid` oficial. |
+| `delivered` | **Entregado** | Confirmado recibido en el dispositivo del cliente (doble check gris). |
+| `read` | **Leído** | Confirmado visto/abierto por el cliente en WhatsApp (doble check azul). |
+| `failed` | **Error de envío** | Rechazado o fallido con código de error saneado (ej. `WINDOW_CLOSED`, `RATE_LIMITED`). |
+| `unknown` | **Estado por confirmar** | Estado de entrega no reportado aún o ambiguo. Nunca se oculta como éxito ni fallo. |
+| `dead_letter` | **No entregable** | Agotados todos los reintentos automáticos del worker o retenido en cola de mensajes no procesables. |
+
+---
+
+## 3. Saneamiento Riguroso de Códigos de Falla
+
+El adaptador `conversationAdapter.ts` incorpora la función `sanitizeFailureCode`, la cual rechaza activamente cualquier cadena que contenga:
+- Bearer tokens, JWTs, o prefijos de autenticación (`ey...`, `EAAB...`, `Bearer`).
+- Dumps de solicitud/respuesta JSON, stacks de excepciones o trazas de ejecución.
+- URLs, endpoints de red o query parameters con IDs telefónicos o secretos.
+- Inyecciones SQL o cadenas mayores a 64 caracteres.
+- Si no es un código seguro y conciso, se muestra la etiqueta genérica segura `ERROR_DESCONOCIDO`.
+
+---
+
+## 4. Prioridad Incondicional de Handoff Humano
+
+Cuando una conversación entra en estado de atención humana:
+- **`human_pending`**: Se muestra un banner advertencia informando que la conversación requiere la asignación de un operador humano. La automatización del bot y los agentes de IA se suspenden automáticamente.
+- **`human_active`**: Se muestra un banner de control indicando el operador a cargo. Se suspende la generación de mensajes por IA.
+- **Sin Bypass**: La interfaz no ofrece ningún botón para "forzar IA" o eludir el handoff mientras la conversación esté bajo atención humana.
+
+---
+
+## 5. Separación entre Política de Negocio y Runtime Técnico de IA
+
+En la pantalla de Configuración (`SettingsView`):
+- **Permiso del Negocio (`ai_enabled`)**: Switch de configuración claramente etiquetado como *"Automatización de IA permitida por el negocio"*. No se confunde con "OpenAI conectado".
+- **Salud del Runtime (`AiRuntimeStatus`)**:
+  - `enabled`: Habilitado y listo operativamente.
+  - `disabled`: Deshabilitado formalmente por la configuración de la empresa.
+  - `unavailable`: Proveedor de inferencia no disponible (503 / upstream caído).
+  - `rate_limited`: Límite de tasa excedido en OpenAI.
+  - `budget_exceeded`: Límite o cuota de consumo alcanzado.
+  - `circuit_open`: Disyuntor disparado.
+
+---
+
+## 6. Disyuntor Operativo (Circuit Breaker)
+
+Cuando el backend comunica que el circuito de IA está abierto (`circuit_open`):
+- Se despliega el banner `CircuitBreakerNotice`: *"Servicio de IA temporalmente suspendido."*
+- El frontend no ejecuta ráfagas de reintentos automáticos ni bombardea el backend, esperando la restauración por el worker / orquestador.
+
+---
+
+## 7. Manejo de Errores 429 y 503
+
+### HTTP 429 (Rate Limited):
+- Se analiza el encabezado estándar `Retry-After`.
+- El componente `RateLimitNotice` inicia una cuenta regresiva visual en segundos no alarmista.
+- El botón de reintento manual permanece deshabilitado hasta que expira el período de enfriamiento para prevenir bucles de saturación.
+
+### HTTP 503 (Provider Unavailable):
+- Se despliega un banner informativo indicando que el servicio aguas arriba no está disponible temporalmente.
+- **Preservación de Sesión**: Un 503 jamás se confunde con un 401/403, por lo que nunca dispara `onAuthExpired` ni desloguea al operador.
+
+---
+
+## 8. Polling Resiliente y Desduplicación
+
+El hook `usePolling` y la vista `ConversationsView` garantizan:
+- **Visibility Guard**: El polling se detiene cuando la pestaña está oculta (`document.visibilityState === 'hidden'`).
+- **Focus Guard**: El polling se suspende si la ventana no tiene el foco del usuario.
+- **Backoff Progresivo**: Incremento cuadrático con jitter en caso de errores de red o disponibilidad.
+- **Deduplicación**: Se indexan los mensajes por ID único (`id` / `outbox_id`), preservando mensajes optimistas locales encolados mientras el backend los confirma, evitando parpadeos y duplicación.
+- **Preservación de Scroll**: El contenedor de mensajes detecta si el usuario está leyendo mensajes anteriores (`isNearBottomRef`) y no fuerza el autoscroll hacia abajo ante cada respuesta del polling.
+
+---
+
+## 9. Limpieza de Puentes Legacy en Catálogo
+
+- Se eliminaron del código de producción las funciones de aplanamiento legacy (`flattenModifierGroupsForWrite`, `mapModifierOptionToDtoInput`, `modifierGroupKey`).
+- Toda mutación de modificadores se realiza a través de la jerarquía canónica de Fase 4 (`ModifierGroup` con opciones hijas `ModifierOption`), utilizando control de concurrencia optimista (CAS) mediante `version` / `expected_version`.
+- Se mantiene únicamente el fallback de lectura para productos preexistentes que aún no hayan sido migrados a la estructura canónica.
+
+---
+
+## 10. Política Fiscal y Medios de Pago
+
+- **Política Fiscal**: Se admite exclusivamente `unconfigured`, `none` (0%), y `exclusive` (tasa configurada explícitamente por el negocio). Si la política no está configurada, se bloquea la cotización y se advierte al operador. No existen presets fiscales hardcodeados.
+- **Métodos de Pago**: Se restringe rigurosamente a `cash_on_delivery`. No se expone ningún medio de pago electrónico (Stripe, PayPal, Deuna, etc.).

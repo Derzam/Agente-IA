@@ -1,7 +1,6 @@
 import type {
   Category as DTOCategory,
   ProductOption as DTOProductOption,
-  ProductOptionInput as DTOProductOptionInput,
 } from '@agente-ia/shared';
 import type {
   Phase4Product as DTOProduct,
@@ -30,41 +29,9 @@ export function mapDtoCategoryToViewModel(dto: DTOCategory): ViewModelCategory {
   };
 }
 
-export function modifierGroupKey(group: ViewModelModifierGroup): string {
-  const normalized = group.name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-  return normalized || group.id || 'general';
-}
-
-export function mapModifierOptionToDtoInput(
-  group: ViewModelModifierGroup,
-  option: ViewModelModifierOption
-): DTOProductOptionInput {
-  return {
-    group_key: modifierGroupKey(group),
-    name: option.name.trim(),
-    price_delta_minor: option.priceDeltaMinor,
-    required: group.required,
-    min_select: group.minSelect,
-    max_select: group.maxSelect,
-    available: group.active && option.isAvailable,
-  };
-}
-
-export function flattenModifierGroupsForWrite(groups: ViewModelModifierGroup[] = []) {
-  return groups.flatMap((group) =>
-    group.options.map((option) => ({
-      clientOptionId: option.id,
-      input: mapModifierOptionToDtoInput(group, option),
-    }))
-  );
-}
-
+/**
+ * Maps hierarchical canonical ModifierGroup & ModifierOption items to ViewModel
+ */
 export function mapCanonicalModifierGroupsToViewModel(
   groups: Array<DTOModifierGroup & { options: DTOModifierOption[] }> = []
 ): ViewModelModifierGroup[] {
@@ -96,7 +63,8 @@ export function mapCanonicalModifierGroupsToViewModel(
 }
 
 /**
- * Groups flat DTO ProductOption items into UI ModifierGroups
+ * Read-only legacy fallback: groups flat DTO ProductOption items into UI ModifierGroups
+ * Preserved strictly for backward compatibility with endpoints returning flat options.
  */
 export function mapDtoProductOptionsToModifierGroups(
   options: DTOProductOption[] = []
@@ -138,9 +106,6 @@ export function mapDtoProductOptionsToModifierGroups(
 
   return Array.from(groupsMap.values()).map((group) => ({
     ...group,
-    // Transitional flat API has no group-level active flag. An inactive group is
-    // represented by all of its options being unavailable until the hierarchical
-    // ModifierGroup contract is exposed by the backend.
     active: group.options.some((option) => option.isAvailable),
   }));
 }

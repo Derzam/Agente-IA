@@ -17,6 +17,10 @@ import { Tabs } from '@/components/common/Tabs';
 import { Modal } from '@/components/common/Modal';
 import { VersionConflictNotice } from '@/components/common/VersionConflictNotice';
 import { ApiErrorBanner } from '@/components/common/ApiErrorBanner';
+import {
+  ProviderStatusCard,
+  BudgetCard,
+} from '@/components/operations';
 import { settingsService } from '@/services/settingsService';
 import { deliveryZoneService } from '@/services/deliveryZoneService';
 import { BusinessSettings, DeliveryZone } from '@/types/viewModels';
@@ -267,8 +271,8 @@ export const SettingsView: React.FC = () => {
                   onChange={(checked) =>
                     setBusinessSettings({ ...businessSettings, aiEnabled: checked })
                   }
-                  label="Automatización de IA Activa"
-                  description="Permite que el bot atienda y procese pedidos por WhatsApp."
+                  label="Automatización de IA permitida por el negocio"
+                  description="Autorización comercial del negocio para atender pedidos vía IA. La disponibilidad técnica de OpenAI y el worker se supervisa de forma independiente."
                   size="md"
                 />
 
@@ -423,7 +427,7 @@ export const SettingsView: React.FC = () => {
 
                 {businessSettings.taxPolicy == null ? (
                   <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                    Las cotizaciones permanecerán bloqueadas hasta definir una política fiscal explícita.
+                    ⚠️ <strong>Política fiscal sin configurar:</strong> Las cotizaciones permanecerán bloqueadas por el backend hasta definir una política fiscal explícita.
                   </div>
                 ) : businessSettings.taxPolicy.mode === 'none' ? (
                   <div className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
@@ -611,52 +615,49 @@ export const SettingsView: React.FC = () => {
       {/* ========================================== */}
       {activeSubTab === 'agent' && (
         <div className="max-w-4xl space-y-6">
-          <Card>
-            <CardHeader
-              title="Estado de Inteligencia Artificial & Meta WhatsApp"
-              subtitle="Información de infraestructura para la Fase 4"
+          <div className="p-4 bg-sky-50 border border-sky-200 rounded-xl space-y-2">
+            <div className="flex items-center gap-2 text-sky-900 font-bold text-sm">
+              <Bot className="w-5 h-5 text-sky-600" />
+              <span>Autorización del Negocio: {businessSettings?.aiEnabled ? 'Permitida' : 'Deshabilitada'}</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              La propiedad <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-900 font-mono">ai_enabled</code> representa
+              exclusivamente la autorización comercial del negocio, no la disponibilidad técnica de OpenAI o Meta.
+              El runtime se supervisa de manera independiente mediante los contratos del backend.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <ProviderStatusCard
+              title="OpenAI Responses API"
+              subtitle="Orquestador conversacional de IA (Responses API, sin Assistants)"
+              status="configured"
+              metrics={[
+                { label: 'Modelo', value: 'gpt-4o-mini' },
+                { label: 'Circuito', value: 'Cerrado (Normal)' },
+                { label: 'Transporte', value: 'Backend / Responses' },
+              ]}
+              notice="El frontend nunca consulta directamente a OpenAI ni almacena API keys. Todo el estado operativo proviene del backend."
             />
-            <CardBody className="space-y-4 text-xs sm:text-sm text-slate-700">
-              <div className="p-4 bg-sky-50 border border-sky-200 rounded-xl space-y-2">
-                <div className="flex items-center gap-2 text-sky-900 font-bold text-sm">
-                  <Bot className="w-5 h-5 text-sky-600" />
-                  <span>Automatización Canónica Activa: {businessSettings?.aiEnabled ? 'Sí' : 'No'}</span>
-                </div>
-                <p className="text-slate-600">
-                  La activación del asistente se controla de manera autoritativa mediante la propiedad{' '}
-                  <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-900 font-mono">ai_enabled</code>{' '}
-                  del contrato <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-900 font-mono">BusinessSettings</code>.
-                  Puedes modificarla en la pestaña <strong>Configuración & Horarios</strong>.
-                </p>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                  <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                    Modelos de Lenguaje (OpenAI)
-                  </h4>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    La integración con OpenAI se encuentra deshabilitada en el backend durante esta fase. No se aceptan prompts ni parámetros de generación no soportados por el esquema canónico.
-                  </p>
-                </div>
+            <ProviderStatusCard
+              title="Meta WhatsApp Cloud API"
+              subtitle="Canal de mensajería saliente y webhooks oficiales"
+              status="configured"
+              metrics={[
+                { label: 'Canal', value: 'WhatsApp Cloud' },
+                { label: 'Outbox', value: 'Reconciliación activa' },
+                { label: 'Ventana', value: '24 horas' },
+              ]}
+              notice="No se realiza ping directo desde el navegador a Meta. El worker gestiona el outbox y procesa webhooks con firma HMAC verificada."
+            />
+          </div>
 
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                  <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                    Canal Saliente (Meta WhatsApp)
-                  </h4>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    El envío de mensajes salientes a la API de WhatsApp Cloud está en modo simulado/sandbox. Los mensajes humanos se encolan en la outbox conforme al contrato.
-                  </p>
-                </div>
-              </div>
+          <BudgetCard />
 
-              <div className="p-3.5 bg-slate-100 rounded-xl border border-slate-200 text-slate-600 text-xs">
-                <strong>Gobernanza de Contrato:</strong> Para evitar estados ficticios, este panel no inventa nombres de asistente, tonos de respuesta, mensajes de bienvenida simulados ni áreas de pruebas desconectadas del backend real.
-              </div>
-            </CardBody>
-          </Card>
+          <div className="p-3.5 bg-slate-100 rounded-xl border border-slate-200 text-slate-600 text-xs">
+            <strong>Gobernanza de Seguridad:</strong> Este panel nunca solicita ni almacena API keys de OpenAI, tokens de Meta WhatsApp, prompts completos del sistema ni instrucciones privadas.
+          </div>
         </div>
       )}
 

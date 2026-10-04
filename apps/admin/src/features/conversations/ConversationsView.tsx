@@ -6,10 +6,12 @@ import {
   Lock,
   Phone,
   ChevronRight,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/common/Button';
 import { Modal } from '@/components/common/Modal';
 import { ConversationStatusBadge } from '@/components/common/StatusBadge';
+import { OutboxStatusBadge } from '@/components/operations/OutboxStatusBadge';
 import { VersionConflictNotice } from '@/components/common/VersionConflictNotice';
 import { ApiErrorBanner } from '@/components/common/ApiErrorBanner';
 import { conversationService } from '@/services/conversationService';
@@ -53,6 +55,10 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
   const [conflictError, setConflictError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<Error | null>(null);
 
+  // Scroll & view preservation refs
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(true);
+
   // Handoff Request Modal State
   const [isHandoffModalOpen, setIsHandoffModalOpen] = useState(false);
   const [selectedReason, setSelectedReason] = useState<HandoffReason>('explicit_request');
@@ -60,6 +66,13 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
 
   // Retain keys on network error
   const retainedMessageKeysRef = useRef<Map<string, string>>(new Map());
+
+  const handleScroll = () => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    isNearBottomRef.current = distanceToBottom < 80;
+  };
 
   const loadConversations = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -79,7 +92,33 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
     if (!convId) return;
     try {
       const msgs = await conversationService.getMessages(convId, { signal });
-      setMessages(msgs);
+      setMessages((prev) => {
+        // Reconcile and deduplicate by message ID
+        const incomingMap = new Map(msgs.map((m) => [m.id, m]));
+        const merged: ChatMessage[] = [];
+        for (const m of msgs) {
+          merged.push(m);
+        }
+        // Retain optimistic / queued receipts not yet confirmed in DB
+        for (const p of prev) {
+          if (!incomingMap.has(p.id) && p.deliveryStatus === 'queued') {
+            merged.push(p);
+          }
+        }
+        if (
+          prev.length === merged.length &&
+          prev.every(
+            (p, i) =>
+              p.id === merged[i].id &&
+              p.deliveryStatus === merged[i].deliveryStatus &&
+              p.failureCode === merged[i].failureCode &&
+              p.content === merged[i].content
+          )
+        ) {
+          return prev;
+        }
+        return merged;
+      });
 
       const conv = conversations.find((c) => c.id === convId);
       if (conv?.activeOrderId) {
@@ -102,6 +141,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
       const targetId = initialConversationId || (data.length > 0 ? data[0].id : '');
       if (targetId) {
         setSelectedConvId(targetId);
+        isNearBottomRef.current = true;
         conversationService.getMessages(targetId).then(setMessages);
       }
       setIsLoading(false);
@@ -119,8 +159,17 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
     intervalMs: 8000,
   });
 
+  // Preserve scroll on message update if already near bottom
+  useEffect(() => {
+    const el = messagesContainerRef.current;
+    if (el && isNearBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages]);
+
   const handleSelectConversation = (convId: string) => {
     setSelectedConvId(convId);
+    isNearBottomRef.current = true;
     loadMessages(convId);
   };
 
@@ -145,6 +194,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
         keyToUse
       );
       retainedMessageKeysRef.current.delete(gestureKey);
+      isNearBottomRef.current = true;
       setMessages((prev) => [...prev, newMsg]);
       setInputText('');
 
@@ -477,8 +527,59 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
               </div>
             </div>
 
+            {/* Prominent Handoff Priority Notice */}
+            {currentConv.status === 'human_pending' && (
+              <div
+                role="alert"
+                className="px-4 py-2.5 bg-rose-50 border-b border-rose-200 flex items-center justify-between gap-2 text-xs text-rose-900"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" aria-hidden="true" />
+                  <span className="truncate">
+                    <strong>Atención requerida:</strong> Automatización de IA suspendida. El operador debe tomar el control. Los mensajes automáticos no continuarán.
+                  </span>
+                </div>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={handleTakeover}
+                  leftIcon={<UserCheck className="w-3.5 h-3.5" />}
+                  className="shrink-0"
+                >
+                  Tomar control
+                </Button>
+              </div>
+            )}
+
+            {currentConv.status === 'human_active' && (
+              <div
+                role="status"
+                className="px-4 py-2 bg-purple-50 border-b border-purple-200 flex items-center justify-between gap-2 text-xs text-purple-900"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <UserCheck className="w-4 h-4 text-purple-600 shrink-0" aria-hidden="true" />
+                  <span className="truncate">
+                    <strong>Atención humana activa:</strong> Automatización de IA suspendida. El operador controla la conversación.
+                  </span>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleReturnToBot}
+                  leftIcon={<Bot className="w-3.5 h-3.5" />}
+                  className="shrink-0"
+                >
+                  Devolver a Bot
+                </Button>
+              </div>
+            )}
+
             {/* Messages Scroll Container */}
-            <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50">
+            <div
+              ref={messagesContainerRef}
+              onScroll={handleScroll}
+              className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50"
+            >
               {messages.map((msg) => {
                 const isCustomer = msg.sender === 'customer';
                 const isBot = msg.sender === 'bot';
@@ -507,15 +608,12 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
                         </span>
                         <div className="flex items-center gap-1.5">
                           <span>{msg.timestamp.slice(11, 16)}</span>
-                          {!isCustomer && !msg.isInternalNote && msg.deliveryStatus && (
-                            <span className="text-[10px] font-mono ml-0.5">
-                              {msg.deliveryStatus === 'queued' && <span title="Encolado">🕒</span>}
-                              {msg.deliveryStatus === 'pending' && <span title="Pendiente">⏳</span>}
-                              {msg.deliveryStatus === 'sent' && <span title="Enviado">✓</span>}
-                              {msg.deliveryStatus === 'delivered' && <span title="Entregado">✓✓</span>}
-                              {msg.deliveryStatus === 'read' && <span title="Leído" className="text-blue-300 font-bold">✓✓</span>}
-                              {msg.deliveryStatus === 'failed' && <span title="Fallo de entrega" className="text-red-300 font-bold">❌</span>}
-                            </span>
+                          {!isCustomer && !msg.isInternalNote && (
+                            <OutboxStatusBadge
+                              status={msg.deliveryStatus}
+                              failureCode={msg.failureCode}
+                              compact
+                            />
                           )}
                         </div>
                       </div>
