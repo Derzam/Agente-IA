@@ -130,6 +130,14 @@ export class ApiEndpoints {
     return this.client.businessRequest<Product[]>(`/products${qs}`, { ...options, businessId });
   }
 
+  async getProductById(
+    productId: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<Product> {
+    return this.client.businessRequest<Product>(`/products/${productId}`, { ...options, businessId });
+  }
+
   async createProduct(
     input: ProductInput,
     idempotencyKey?: string,
