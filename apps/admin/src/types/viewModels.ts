@@ -89,6 +89,7 @@ export interface ChatMessage {
   timestamp: string;
   isInternalNote?: boolean;
   orderReferenceId?: string;
+  deliveryStatus?: 'queued' | 'pending' | 'sent' | 'delivered' | 'read' | 'failed' | 'unknown' | null;
 }
 
 export interface ConversationSummary {
@@ -105,6 +106,7 @@ export interface ConversationSummary {
   activeOrderId?: string;
   handoffId?: string;
   handoffRequestedAt?: string;
+  handoffVersion?: number;
   handoffReason?: string;
   handoffStatus?: 'pending' | 'active' | 'resolved';
 }
@@ -210,6 +212,12 @@ export interface BusinessDayHours {
   closeTime: string;
 }
 
+export interface TaxPolicyViewModel {
+  mode: 'none' | 'exclusive';
+  rateBps: number;
+  rounding: 'per_line_half_up';
+}
+
 export interface BusinessSettings {
   version?: number;
   name: string;
@@ -224,6 +232,7 @@ export interface BusinessSettings {
   minOrder: number;
   sessionTtlMinutes: number;
   aiEnabled: boolean;
+  taxPolicy?: TaxPolicyViewModel | null;
   emergencyCloseReason?: string;
   hours: BusinessDayHours[];
 }

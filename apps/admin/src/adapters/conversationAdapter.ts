@@ -39,6 +39,7 @@ export function mapDtoMessageToViewModel(dto: DTOMessage): ViewModelChatMessage 
     content: dto.text || (dto.kind === 'location' ? '📍 Ubicación compartida' : ''),
     timestamp: dto.created_at,
     isInternalNote: false,
+    deliveryStatus: dto.delivery_status,
   };
 }
 
@@ -71,5 +72,8 @@ export function mapDtoConversationToViewModel(
     activeOrderId: options?.activeOrderId,
     handoffId: options?.handoff?.id,
     handoffRequestedAt: options?.handoff?.created_at,
+    handoffVersion: options?.handoff?.version,
+    handoffReason: options?.handoff?.reason,
+    handoffStatus: options?.handoff?.status,
   };
 }

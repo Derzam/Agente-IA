@@ -12,6 +12,22 @@ import type { RequestOptions } from '@/api/types';
 let localConversations: ConversationSummary[] = [...mockConversations];
 let localMessages: Record<string, ChatMessage[]> = { ...mockMessagesByConversation };
 
+async function fetchConversationWithHandoff(
+  conversationId: string,
+  options?: RequestOptions
+): Promise<ConversationSummary> {
+  const [conversation, handoffs] = await Promise.all([
+    endpoints.getConversationById(conversationId, undefined, options),
+    endpoints.getHandoffs(undefined, undefined, options),
+  ]);
+  const handoff = handoffs.find(
+    (item) =>
+      item.conversation_id === conversationId &&
+      (item.status === 'pending' || item.status === 'active')
+  );
+  return mapDtoConversationToViewModel(conversation, { handoff });
+}
+
 export const conversationService = {
   async getConversations(
     params?: { status?: string; limit?: number; cursor?: string },
@@ -24,8 +40,18 @@ export const conversationService = {
       return Promise.resolve([...localConversations]);
     }
 
-    const dtoList = await endpoints.getConversations(params, undefined, options);
-    return dtoList.map((dto) => mapDtoConversationToViewModel(dto));
+    const [dtoList, handoffs] = await Promise.all([
+      endpoints.getConversations(params, undefined, options),
+      endpoints.getHandoffs(undefined, undefined, options),
+    ]);
+    const handoffByConversation = new Map(
+      handoffs
+        .filter((item) => item.status === 'pending' || item.status === 'active')
+        .map((item) => [item.conversation_id, item])
+    );
+    return dtoList.map((dto) =>
+      mapDtoConversationToViewModel(dto, { handoff: handoffByConversation.get(dto.id) })
+    );
   },
 
   async getMessages(conversationId: string, options?: RequestOptions): Promise<ChatMessage[]> {
@@ -76,8 +102,12 @@ export const conversationService = {
       return Promise.resolve(newMsg);
     }
 
+    if (!USE_MOCK_DATA && isInternalNote) {
+      throw new Error('Las notas internas privadas no están soportadas por el contrato de la API v0.1.');
+    }
+
     // Call canonical POST /conversations/{id}/messages
-    await endpoints.sendMessage(
+    const receipt = await endpoints.sendMessage(
       conversationId,
       {
         text,
@@ -88,16 +118,17 @@ export const conversationService = {
       options
     );
 
-    // Return optimistic chat message presentation model
+    // Return message receipt with status 'queued' (202 Accepted)
     return {
-      id: `msg-${Date.now()}`,
+      id: receipt?.outbox_id || `msg-${Date.now()}`,
       conversationId,
       sender: 'staff',
       senderName: 'Operador',
       type: 'text',
       content: text,
       timestamp: new Date().toISOString(),
-      isInternalNote,
+      isInternalNote: false,
+      deliveryStatus: receipt?.status || 'queued',
     };
   },
 
@@ -194,8 +225,12 @@ export const conversationService = {
     conversationId: string,
     operatorUserId: UUID,
     handoffId?: string,
-    expectedVersion = 1
+    expectedConversationVersion = 1,
+    expectedHandoffVersion?: number
   ): Promise<ConversationSummary> {
+    if (!operatorUserId) {
+      throw new Error('Se requiere un usuario autenticado para tomar el control de la conversación.');
+    }
     if (USE_MOCK_DATA) {
       const index = localConversations.findIndex((c) => c.id === conversationId);
       if (index === -1) throw new Error('Conversation not found');
@@ -210,13 +245,17 @@ export const conversationService = {
 
     let targetHandoffId = handoffId;
     if (!targetHandoffId) {
-      const handoff = await this.requestHandoff(conversationId, 'explicit_request', expectedVersion);
+      const handoff = await this.requestHandoff(conversationId, 'explicit_request', expectedConversationVersion);
       targetHandoffId = handoff.id;
+      expectedHandoffVersion = handoff.version;
     }
 
-    await this.claimHandoff(targetHandoffId, operatorUserId, expectedVersion);
-    const updatedConv = await endpoints.getConversationById(conversationId);
-    return mapDtoConversationToViewModel(updatedConv);
+    if (expectedHandoffVersion === undefined) {
+      throw new Error('No se dispone de la versión actual del handoff. Actualiza la conversación antes de tomar el control.');
+    }
+
+    await this.claimHandoff(targetHandoffId, operatorUserId, expectedHandoffVersion);
+    return fetchConversationWithHandoff(conversationId);
   },
 
   /**
@@ -225,7 +264,7 @@ export const conversationService = {
   async returnToBot(
     conversationId: string,
     handoffId?: string,
-    expectedVersion = 1
+    expectedHandoffVersion?: number
   ): Promise<ConversationSummary> {
     if (USE_MOCK_DATA) {
       const index = localConversations.findIndex((c) => c.id === conversationId);
@@ -240,15 +279,17 @@ export const conversationService = {
     }
 
     if (handoffId) {
+      if (expectedHandoffVersion === undefined) {
+        throw new Error('No se dispone de la versión actual del handoff. Actualiza la conversación antes de devolverla al bot.');
+      }
       await this.resolveHandoff(
         handoffId,
         'resume_bot',
         'Atención humana finalizada. Retoma el asistente virtual.',
-        expectedVersion
+        expectedHandoffVersion
       );
     }
 
-    const updatedConv = await endpoints.getConversationById(conversationId);
-    return mapDtoConversationToViewModel(updatedConv);
+    return fetchConversationWithHandoff(conversationId);
   },
 };

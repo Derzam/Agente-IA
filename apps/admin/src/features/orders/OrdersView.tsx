@@ -86,12 +86,33 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
     intervalMs: 8000,
   });
 
+  const handleSelectOrder = useCallback(async (order: Order) => {
+    setSelectedOrder(order);
+    try {
+      const payments = await orderService.getOrderPayments(order.id);
+      const targetPayment = payments.find((p) => p.status === 'pending') || payments[0];
+      if (targetPayment) {
+        setSelectedOrder((current) =>
+          current && current.id === order.id
+            ? {
+                ...current,
+                payment: targetPayment,
+                paymentStatus: targetPayment.status as any,
+              }
+            : current
+        );
+      }
+    } catch {
+      // Non-blocking: retain existing order info if payments lookup fails
+    }
+  }, []);
+
   useEffect(() => {
     if (initialOrderId && orders.length > 0) {
       const found = orders.find((o) => o.id === initialOrderId);
-      if (found) setSelectedOrder(found);
+      if (found) handleSelectOrder(found);
     }
-  }, [initialOrderId, orders]);
+  }, [initialOrderId, orders, handleSelectOrder]);
 
   const handleTransition = async (order: Order, action: OrderAction, reason?: string) => {
     setConflictError(null);
@@ -149,7 +170,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
     try {
       const updated = await orderService.recordCashPayment(
         selectedOrder.id,
-        selectedOrder.payment?.version || selectedOrder.version || 1,
+        selectedOrder.payment?.version,
         cashNote,
         new Date().toISOString(),
         keyToUse
@@ -337,7 +358,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                     return (
                       <div
                         key={order.id}
-                        onClick={() => setSelectedOrder(order)}
+                        onClick={() => handleSelectOrder(order)}
                         className="bg-white rounded-xl p-3.5 shadow-2xs border border-slate-200 hover:border-orange-300 hover:shadow-md transition-all cursor-pointer space-y-2.5 relative group"
                       >
                         {/* Card Top: OrderNumber & Type */}
@@ -512,7 +533,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                     </td>
                     <td className="py-3 px-4 text-slate-500">{order.createdAt.slice(11, 16)}</td>
                     <td className="py-3 px-4 text-right">
-                      <Button variant="ghost" size="sm" onClick={() => setSelectedOrder(order)}>
+                      <Button variant="ghost" size="sm" onClick={() => handleSelectOrder(order)}>
                         Detalles
                       </Button>
                     </td>
@@ -741,7 +762,9 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                 </span>
               </div>
 
-              {selectedOrder.paymentStatus === 'pending' && (
+              {selectedOrder.paymentStatus === 'pending' &&
+                selectedOrder.status !== 'cancelled' &&
+                selectedOrder.status !== 'awaiting_confirmation' && (
                 <div className="pt-3 border-t border-slate-200">
                   <Button
                     variant="primary"

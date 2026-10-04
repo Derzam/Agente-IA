@@ -1,6 +1,15 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { NormalizedApiError, NetworkError } from '@/api/types';
 
+export function shouldRunPolling(
+  enabled: boolean,
+  hidden: boolean,
+  focused: boolean,
+  executing: boolean
+): boolean {
+  return enabled && !hidden && focused && !executing;
+}
+
 interface UsePollingOptions {
   callback: (signal: AbortSignal) => Promise<void>;
   intervalMs?: number;
@@ -19,6 +28,9 @@ export function usePolling({
   const consecutiveNetworkErrorsRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backoffDelayRef = useRef<number | null>(null);
+  const isWindowFocusedRef = useRef(
+    typeof document === 'undefined' ? true : document.visibilityState === 'visible'
+  );
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -28,7 +40,7 @@ export function usePolling({
   }, []);
 
   const executeTick = useCallback(async () => {
-    if (!enabled || document.hidden || isExecutingRef.current) {
+    if (!shouldRunPolling(enabled, document.hidden, isWindowFocusedRef.current, isExecutingRef.current)) {
       return;
     }
 
@@ -62,7 +74,7 @@ export function usePolling({
       activeAbortControllerRef.current = null;
 
       // Schedule next run if still enabled
-      if (enabled && !document.hidden) {
+      if (enabled && !document.hidden && isWindowFocusedRef.current) {
         const delay = backoffDelayRef.current ?? intervalMs;
         clearTimer();
         timerRef.current = setTimeout(executeTick, delay);
@@ -82,22 +94,43 @@ export function usePolling({
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
+        isWindowFocusedRef.current = false;
         clearTimer();
         activeAbortControllerRef.current?.abort();
-      } else {
-        // Tab gained focus: resume polling immediately
+      } else if (typeof document.hasFocus !== 'function' || document.hasFocus()) {
+        isWindowFocusedRef.current = true;
         consecutiveNetworkErrorsRef.current = 0;
         backoffDelayRef.current = null;
+        clearTimer();
         executeTick();
       }
     };
 
+    const handleWindowBlur = () => {
+      isWindowFocusedRef.current = false;
+      clearTimer();
+      activeAbortControllerRef.current?.abort();
+    };
+
+    const handleWindowFocus = () => {
+      if (document.hidden) return;
+      isWindowFocusedRef.current = true;
+      consecutiveNetworkErrorsRef.current = 0;
+      backoffDelayRef.current = null;
+      clearTimer();
+      executeTick();
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('focus', handleWindowFocus);
 
     return () => {
       clearTimer();
       activeAbortControllerRef.current?.abort();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
+      window.removeEventListener('focus', handleWindowFocus);
     };
   }, [enabled, executeTick, clearTimer]);
 }

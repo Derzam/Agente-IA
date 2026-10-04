@@ -1,12 +1,14 @@
 import type { MenuItem, MenuItemCategory, ModifierGroup } from '@/types/viewModels';
-import type { ProductOption as DTOProductOption } from '@agente-ia/shared';
+import type {
+  Phase4ModifierGroup,
+  Phase4ModifierOption,
+} from '@/api/endpoints';
 import { mockMenuItems, mockCategories } from '@/mocks/mockData';
 import { USE_MOCK_DATA, newIdempotencyKey } from './apiClient';
 import { endpoints } from '@/api/endpoints';
 import {
   mapDtoCategoryToViewModel,
   mapDtoProductToViewModel,
-  flattenModifierGroupsForWrite,
 } from '@/adapters/menuAdapter';
 import { decimalToMinor } from '@/adapters/moneyAdapter';
 import type { RequestOptions } from '@/api/types';
@@ -17,36 +19,109 @@ let localCategories: MenuItemCategory[] = [...mockCategories];
 export async function syncProductModifiers(
   productId: string,
   groups: ModifierGroup[] = [],
-  currentOptions: DTOProductOption[] = [],
+  currentGroups: Array<Phase4ModifierGroup & { options: Phase4ModifierOption[] }> = [],
   options?: RequestOptions
 ): Promise<void> {
-  const desired = flattenModifierGroupsForWrite(groups);
-  const desiredIds = new Set(desired.map((entry) => entry.clientOptionId));
-  const currentById = new Map(currentOptions.map((option) => [option.id, option]));
+  const currentGroupById = new Map(currentGroups.map((group) => [group.id, group]));
+  const retainedGroupIds = new Set<string>();
 
-  for (const entry of desired) {
-    const existing = currentById.get(entry.clientOptionId);
-    const key = newIdempotencyKey();
-    if (existing) {
-      await endpoints.updateProductOption(
-        productId,
-        existing.id,
-        { ...entry.input, expected_version: existing.version },
-        key,
-        undefined,
-        options
-      );
-    } else {
-      await endpoints.createProductOption(productId, entry.input, key, undefined, options);
+  for (const group of groups) {
+    const existingGroup = currentGroupById.get(group.id);
+    const persistedGroup = existingGroup
+      ? await endpoints.updateModifierGroup(
+          productId,
+          existingGroup.id,
+          {
+            name: group.name.trim(),
+            required: group.required,
+            min_select: group.minSelect,
+            max_select: group.maxSelect,
+            sort_order: group.sortOrder,
+            active: group.active,
+            expected_version: existingGroup.version,
+          },
+          newIdempotencyKey(),
+          undefined,
+          options
+        )
+      : await endpoints.createModifierGroup(
+          productId,
+          {
+            name: group.name.trim(),
+            required: group.required,
+            min_select: group.minSelect,
+            max_select: group.maxSelect,
+            sort_order: group.sortOrder,
+            active: group.active,
+          },
+          newIdempotencyKey(),
+          undefined,
+          options
+        );
+
+    if (existingGroup) retainedGroupIds.add(existingGroup.id);
+
+    const currentOptions = existingGroup?.options || [];
+    const currentOptionById = new Map(currentOptions.map((option) => [option.id, option]));
+    const retainedOptionIds = new Set<string>();
+
+    for (const option of group.options) {
+      const existingOption = currentOptionById.get(option.id);
+      if (existingOption) {
+        await endpoints.updateModifierOption(
+          productId,
+          persistedGroup.id,
+          existingOption.id,
+          {
+            name: option.name.trim(),
+            price_delta_minor: option.priceDeltaMinor,
+            available: option.isAvailable,
+            sort_order: option.sortOrder,
+            expected_version: existingOption.version,
+          },
+          newIdempotencyKey(),
+          undefined,
+          options
+        );
+        retainedOptionIds.add(existingOption.id);
+      } else {
+        await endpoints.createModifierOption(
+          productId,
+          persistedGroup.id,
+          {
+            name: option.name.trim(),
+            price_delta_minor: option.priceDeltaMinor,
+            available: option.isAvailable,
+            sort_order: option.sortOrder,
+          },
+          newIdempotencyKey(),
+          undefined,
+          options
+        );
+      }
+    }
+
+    for (const existingOption of currentOptions) {
+      if (!retainedOptionIds.has(existingOption.id)) {
+        await endpoints.deleteModifierOption(
+          productId,
+          persistedGroup.id,
+          existingOption.id,
+          existingOption.version,
+          newIdempotencyKey(),
+          undefined,
+          options
+        );
+      }
     }
   }
 
-  for (const existing of currentOptions) {
-    if (!desiredIds.has(existing.id)) {
-      await endpoints.deleteProductOption(
+  for (const existingGroup of currentGroups) {
+    if (!retainedGroupIds.has(existingGroup.id)) {
+      await endpoints.deleteModifierGroup(
         productId,
-        existing.id,
-        existing.version,
+        existingGroup.id,
+        existingGroup.version,
         newIdempotencyKey(),
         undefined,
         options
@@ -324,7 +399,7 @@ export const menuService = {
       options
     );
 
-    await syncProductModifiers(item.id, item.modifierGroups || [], currentDto.options || [], options);
+    await syncProductModifiers(item.id, item.modifierGroups || [], currentDto.modifier_groups || [], options);
     const refreshedDto = await endpoints.getProductById(item.id, undefined, options);
     return mapDtoProductToViewModel(refreshedDto);
   },
