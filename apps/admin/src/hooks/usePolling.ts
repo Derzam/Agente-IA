@@ -1,6 +1,15 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { NormalizedApiError, NetworkError } from '@/api/types';
 
+export function shouldRunPolling(
+  enabled: boolean,
+  hidden: boolean,
+  focused: boolean,
+  executing: boolean
+): boolean {
+  return enabled && !hidden && focused && !executing;
+}
+
 interface UsePollingOptions {
   callback: (signal: AbortSignal) => Promise<void>;
   intervalMs?: number;
@@ -31,7 +40,7 @@ export function usePolling({
   }, []);
 
   const executeTick = useCallback(async () => {
-    if (!enabled || document.hidden || !isWindowFocusedRef.current || isExecutingRef.current) {
+    if (!shouldRunPolling(enabled, document.hidden, isWindowFocusedRef.current, isExecutingRef.current)) {
       return;
     }
 
