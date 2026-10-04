@@ -6,6 +6,7 @@ import {
   AuthError,
   RequestOptions,
   ErrorCode,
+  VERSION_CONFLICT_MESSAGE,
 } from './types';
 
 export interface ApiClientConfig {
@@ -213,10 +214,7 @@ export class ApiClient {
     // 409 Conflict / Version Conflict
     if (status === 409) {
       if (code === 'VERSION_CONFLICT' || message.toLowerCase().includes('versión') || message.toLowerCase().includes('version')) {
-        throw new VersionConflictError(
-          'Este registro cambió. Revisa la nueva información antes de volver a ejecutar la acción.',
-          requestId
-        );
+        throw new VersionConflictError(VERSION_CONFLICT_MESSAGE, requestId);
       }
     }
 
