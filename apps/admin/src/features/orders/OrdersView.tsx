@@ -10,6 +10,7 @@ import {
   MessageSquare,
   AlertCircle,
   FileText,
+  DollarSign,
 } from 'lucide-react';
 import { Button } from '@/components/common/Button';
 import { FilterBar } from '@/components/common/FilterBar';
@@ -48,6 +49,9 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isCashModalOpen, setIsCashModalOpen] = useState(false);
+  const [cashNote, setCashNote] = useState('Pago en efectivo recibido al entregar');
+  const [isRecordingPayment, setIsRecordingPayment] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [conflictError, setConflictError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<Error | null>(null);
@@ -131,6 +135,43 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
     await handleTransition(selectedOrder, 'cancel', cancelReason);
     setIsCancelModalOpen(false);
     setCancelReason('');
+  };
+
+  const handleRecordCashPayment = async () => {
+    if (!selectedOrder) return;
+    setIsRecordingPayment(true);
+    setConflictError(null);
+    setActionError(null);
+
+    const gestureKey = `${selectedOrder.id}-cash-payment`;
+    const keyToUse = retainedKeysRef.current.get(gestureKey) || newIdempotencyKey();
+
+    try {
+      const updated = await orderService.recordCashPayment(
+        selectedOrder.id,
+        selectedOrder.payment?.version || selectedOrder.version || 1,
+        cashNote,
+        new Date().toISOString(),
+        keyToUse
+      );
+      retainedKeysRef.current.delete(gestureKey);
+      setOrders((prev) => prev.map((o) => (o.id === selectedOrder.id ? updated : o)));
+      setSelectedOrder(updated);
+      setIsCashModalOpen(false);
+    } catch (err: any) {
+      if (err instanceof VersionConflictError) {
+        setConflictError(err.message);
+        await loadOrders();
+      } else if (err instanceof NetworkError) {
+        retainedKeysRef.current.set(gestureKey, keyToUse);
+        setActionError(err);
+      } else {
+        retainedKeysRef.current.delete(gestureKey);
+        setActionError(err);
+      }
+    } finally {
+      setIsRecordingPayment(false);
+    }
   };
 
   // Filter orders
@@ -650,6 +691,18 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                       <p className="font-bold text-slate-800">
                         {item.quantity}x {item.name}
                       </p>
+                      {item.selectedModifiers && item.selectedModifiers.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {item.selectedModifiers.map((mod) => (
+                            <span
+                              key={mod.id}
+                              className="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700 font-medium"
+                            >
+                              {mod.name} {mod.priceDelta > 0 ? `(+$${mod.priceDelta.toFixed(2)})` : ''}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       {item.notes && <p className="text-slate-500 italic mt-0.5">Nota: {item.notes}</p>}
                       <p className="text-slate-400 mt-0.5">${item.unitPrice.toFixed(2)} c/u</p>
                     </div>
@@ -669,14 +722,38 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                 <span>Envío delivery:</span>
                 <span>${selectedOrder.deliveryFee.toFixed(2)}</span>
               </div>
+              {selectedOrder.discount !== undefined && selectedOrder.discount > 0 && (
+                <div className="flex justify-between text-emerald-600 font-medium">
+                  <span>Descuento:</span>
+                  <span>-${selectedOrder.discount.toFixed(2)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-slate-900 font-bold text-sm pt-2 border-t border-slate-200">
                 <span>Total a cobrar:</span>
                 <span className="text-orange-600">${selectedOrder.total.toFixed(2)}</span>
               </div>
-              <div className="pt-2 text-[11px] text-slate-500 flex justify-between">
-                <span>Método: {selectedOrder.paymentMethod}</span>
-                <span className="capitalize font-semibold text-slate-700">Estado: {selectedOrder.paymentStatus}</span>
+              <div className="pt-2 text-[11px] text-slate-500 flex justify-between items-center">
+                <span>Método: {selectedOrder.paymentMethod === 'cash' || selectedOrder.paymentMethod === 'card_on_delivery' ? 'Efectivo contra entrega' : selectedOrder.paymentMethod}</span>
+                <span className={`capitalize font-semibold px-2 py-0.5 rounded-full ${
+                  selectedOrder.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {selectedOrder.paymentStatus === 'paid' ? 'Pagado' : 'Pendiente de pago'}
+                </span>
               </div>
+
+              {selectedOrder.paymentStatus === 'pending' && (
+                <div className="pt-3 border-t border-slate-200">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => setIsCashModalOpen(true)}
+                    leftIcon={<DollarSign className="w-4 h-4" />}
+                  >
+                    Registrar Pago en Efectivo (${selectedOrder.total.toFixed(2)})
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -784,6 +861,64 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
             )}
           </div>
         )}
+      </Modal>
+
+      {/* CASH PAYMENT REGISTRATION MODAL */}
+      <Modal
+        isOpen={isCashModalOpen}
+        onClose={() => setIsCashModalOpen(false)}
+        title="Registrar Pago en Efectivo"
+        maxWidth="md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setIsCashModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={isRecordingPayment}
+              onClick={handleRecordCashPayment}
+              leftIcon={<DollarSign className="w-4 h-4" />}
+            >
+              {isRecordingPayment ? 'Registrando...' : 'Confirmar Cobro en Efectivo'}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4 text-xs sm:text-sm">
+          <p className="text-slate-600">
+            Registrar recepción manual del pago en efectivo para el pedido{' '}
+            <span className="font-bold text-slate-900">{selectedOrder?.orderNumber}</span>.
+          </p>
+
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 flex justify-between items-center">
+            <div>
+              <p className="text-xs font-semibold text-emerald-800">Monto total a cobrar:</p>
+              <p className="text-lg font-black text-emerald-700">${selectedOrder?.total.toFixed(2)} USD</p>
+            </div>
+            <span className="text-xs bg-emerald-200 text-emerald-900 px-2.5 py-1 rounded-full font-bold">
+              Efectivo / Cash
+            </span>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Nota o comprobante de entrega (opcional):
+            </label>
+            <textarea
+              rows={2}
+              value={cashNote}
+              onChange={(e) => setCashNote(e.target.value)}
+              placeholder="ej. Cobrado en puerta contra entrega sin novedades..."
+              className="w-full text-xs p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+            />
+          </div>
+
+          <p className="text-[11px] text-slate-400 italic">
+            Esta acción registra el cobro en el backend (POST /payments/cash-record) y actualizará el estado del pago a &quot;Pagado&quot;.
+          </p>
+        </div>
       </Modal>
     </div>
   );

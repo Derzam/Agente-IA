@@ -3,7 +3,7 @@ import type { OrderStatus, ConversationStatus } from '@agente-ia/shared';
 export type { OrderStatus, ConversationStatus };
 
 export type FulfillmentType = 'delivery' | 'pickup';
-export type PaymentStatus = 'pending' | 'paid' | 'pay_on_delivery' | 'failed';
+export type PaymentStatus = 'pending' | 'paid' | 'cancelled' | 'pay_on_delivery' | 'failed';
 export type PaymentMethod = 'cash' | 'card_on_delivery' | 'bank_transfer' | 'online_link';
 
 export interface OrderModifier {
@@ -32,6 +32,19 @@ export interface OrderDeliveryAddress {
   longitude?: number;
 }
 
+export interface OrderPayment {
+  id: string;
+  orderId: string;
+  method: 'cash_on_delivery';
+  status: 'pending' | 'paid' | 'cancelled';
+  amountMinor: number;
+  amount: number;
+  currency: string;
+  paidAt?: string | null;
+  notes?: string | null;
+  version?: number;
+}
+
 export interface Order {
   id: string;
   orderNumber: string;
@@ -43,10 +56,17 @@ export interface Order {
   fulfillmentType: FulfillmentType;
   items: OrderItem[];
   subtotal: number;
+  subtotalMinor?: number;
   deliveryFee: number;
+  deliveryMinor?: number;
+  discount?: number;
+  discountMinor?: number;
   total: number;
+  totalMinor?: number;
+  currency?: string;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
+  payment?: OrderPayment;
   deliveryAddress?: OrderDeliveryAddress;
   kitchenNotes?: string;
   createdAt: string;
@@ -85,6 +105,8 @@ export interface ConversationSummary {
   activeOrderId?: string;
   handoffId?: string;
   handoffRequestedAt?: string;
+  handoffReason?: string;
+  handoffStatus?: 'pending' | 'active' | 'resolved';
 }
 
 export interface MenuItemCategory {
@@ -99,16 +121,24 @@ export interface MenuItemCategory {
 export interface ModifierOption {
   id: string;
   name: string;
+  priceDeltaMinor: number;
   priceDelta: number;
   isAvailable: boolean;
+  sortOrder: number;
+  version?: number;
 }
 
 export interface ModifierGroup {
   id: string;
   name: string;
   required: boolean;
+  minSelect: number;
+  maxSelect: number;
   minSelections: number;
   maxSelections: number;
+  sortOrder: number;
+  active: boolean;
+  version?: number;
   options: ModifierOption[];
 }
 
@@ -120,6 +150,7 @@ export interface MenuItem {
   name: string;
   description: string;
   price: number;
+  priceMinor?: number;
   imageUrl?: string;
   isAvailable: boolean;
   modifierGroups?: ModifierGroup[];
@@ -138,6 +169,22 @@ export interface Customer {
   defaultDeliveryAddress?: OrderDeliveryAddress;
   isVip?: boolean;
   notes?: string;
+}
+
+export interface DeliveryZone {
+  id: string;
+  version?: number;
+  name: string;
+  feeMinor: number;
+  fee: number;
+  minOrderMinor: number;
+  minOrder: number;
+  priority: number;
+  active: boolean;
+  polygonGeojson?: {
+    type: 'Polygon';
+    coordinates: number[][][];
+  };
 }
 
 export type AgentTone = 'friendly_casual' | 'formal_polite' | 'energetic_youthful' | 'unavailable';
@@ -164,12 +211,19 @@ export interface BusinessDayHours {
 }
 
 export interface BusinessSettings {
+  version?: number;
   name: string;
   legalName?: string;
   supportPhone: string;
   address: string;
   currencySymbol: string;
   isAcceptingOrders: boolean;
+  deliveryEnabled: boolean;
+  pickupEnabled: boolean;
+  minOrderMinor: number;
+  minOrder: number;
+  sessionTtlMinutes: number;
+  aiEnabled: boolean;
   emergencyCloseReason?: string;
   hours: BusinessDayHours[];
 }

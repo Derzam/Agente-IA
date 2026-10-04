@@ -32,16 +32,23 @@ export function mapDtoProductOptionsToModifierGroups(
   options: DTOProductOption[] = []
 ): ViewModelModifierGroup[] {
   const groupsMap = new Map<string, ViewModelModifierGroup>();
+  let groupSortIndex = 0;
 
   for (const opt of options) {
     const groupKey = opt.group_key || 'general';
     if (!groupsMap.has(groupKey)) {
+      groupSortIndex += 1;
       groupsMap.set(groupKey, {
         id: groupKey,
         name: groupKey.charAt(0).toUpperCase() + groupKey.slice(1).replace(/_/g, ' '),
         required: opt.required,
+        minSelect: opt.min_select,
+        maxSelect: opt.max_select,
         minSelections: opt.min_select,
         maxSelections: opt.max_select,
+        sortOrder: groupSortIndex,
+        active: true,
+        version: opt.version,
         options: [],
       });
     }
@@ -50,8 +57,11 @@ export function mapDtoProductOptionsToModifierGroups(
     const modifierOption: ViewModelModifierOption = {
       id: opt.id,
       name: opt.name,
+      priceDeltaMinor: opt.price_delta_minor,
       priceDelta: minorToDecimal(opt.price_delta_minor),
       isAvailable: opt.available,
+      sortOrder: group.options.length + 1,
+      version: opt.version,
     };
     group.options.push(modifierOption);
   }
@@ -75,6 +85,7 @@ export function mapDtoProductToViewModel(
     name: dto.name,
     description: dto.description || '',
     price: minorToDecimal(dto.price_minor),
+    priceMinor: dto.price_minor,
     imageUrl: dto.image_url || undefined,
     isAvailable: dto.available,
     modifierGroups: mapDtoProductOptionsToModifierGroups(dto.options),

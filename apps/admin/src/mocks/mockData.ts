@@ -8,6 +8,7 @@ import {
   AgentConfig,
   BusinessSettings,
   DeliverySettings,
+  DeliveryZone,
   DashboardMetrics,
   HourlySalesData,
 } from '@/types/viewModels';
@@ -39,15 +40,36 @@ export const mockMenuItems: MenuItem[] = [
     updatedAt: '2026-10-02T12:00:00Z',
     modifierGroups: [
       {
-        id: 'mod-1',
-        name: 'Término de la carne',
+        id: 'grp-tamano',
+        name: 'Tamaño',
         required: true,
+        minSelect: 1,
+        maxSelect: 1,
         minSelections: 1,
         maxSelections: 1,
+        sortOrder: 1,
+        active: true,
+        version: 1,
         options: [
-          { id: 'opt-1-1', name: 'Tres Cuartos (Recomendado)', priceDelta: 0, isAvailable: true },
-          { id: 'opt-1-2', name: 'Bien Cocida', priceDelta: 0, isAvailable: true },
-          { id: 'opt-1-3', name: 'Término Medio', priceDelta: 0, isAvailable: true },
+          { id: 'opt-tam-1', name: 'Normal', priceDeltaMinor: 0, priceDelta: 0, isAvailable: true, sortOrder: 1, version: 1 },
+          { id: 'opt-tam-2', name: 'Doble', priceDeltaMinor: 200, priceDelta: 2.0, isAvailable: true, sortOrder: 2, version: 1 },
+        ],
+      },
+      {
+        id: 'grp-extras',
+        name: 'Extras',
+        required: false,
+        minSelect: 0,
+        maxSelect: 3,
+        minSelections: 0,
+        maxSelections: 3,
+        sortOrder: 2,
+        active: true,
+        version: 1,
+        options: [
+          { id: 'opt-ext-1', name: 'Queso', priceDeltaMinor: 50, priceDelta: 0.5, isAvailable: true, sortOrder: 1, version: 1 },
+          { id: 'opt-ext-2', name: 'Tocino', priceDeltaMinor: 100, priceDelta: 1.0, isAvailable: true, sortOrder: 2, version: 1 },
+          { id: 'opt-ext-3', name: 'Huevo', priceDeltaMinor: 75, priceDelta: 0.75, isAvailable: true, sortOrder: 3, version: 1 },
         ],
       },
     ],
@@ -157,6 +179,7 @@ export const mockOrders: Order[] = [
   {
     id: 'ord-1082',
     orderNumber: '#BS-1082',
+    version: 1,
     customerId: 'cust-1',
     customerName: 'Carlos Mendoza',
     customerPhone: '+51 987 654 321',
@@ -190,10 +213,25 @@ export const mockOrders: Order[] = [
       },
     ],
     subtotal: 20.10,
+    subtotalMinor: 2010,
     deliveryFee: 2.00,
+    deliveryMinor: 200,
     total: 22.10,
-    paymentMethod: 'card_on_delivery',
-    paymentStatus: 'pay_on_delivery',
+    totalMinor: 2210,
+    currency: 'USD',
+    paymentMethod: 'cash',
+    paymentStatus: 'pending',
+    payment: {
+      id: 'pay-ord-1082',
+      orderId: 'ord-1082',
+      method: 'cash_on_delivery',
+      status: 'pending',
+      amountMinor: 2210,
+      amount: 22.10,
+      currency: 'USD',
+      paidAt: null,
+      version: 1,
+    },
     deliveryAddress: {
       street: 'Calle Los Sauces',
       number: '450',
@@ -631,12 +669,19 @@ export const mockAgentConfig: AgentConfig = {
 };
 
 export const mockBusinessSettings: BusinessSettings = {
+  version: 1,
   name: 'Burger Station — Miraflores',
   legalName: 'Burger Station SAC',
   supportPhone: '+51 987 654 321',
   address: 'Av. Principal 123, Miraflores, Lima',
   currencySymbol: '$',
   isAcceptingOrders: true,
+  deliveryEnabled: true,
+  pickupEnabled: true,
+  minOrderMinor: 500,
+  minOrder: 5.0,
+  sessionTtlMinutes: 60,
+  aiEnabled: true,
   hours: [
     { dayOfWeek: 1, dayName: 'Lunes', isOpen: true, openTime: '12:00', closeTime: '23:00' },
     { dayOfWeek: 2, dayName: 'Martes', isOpen: true, openTime: '12:00', closeTime: '23:00' },
@@ -648,10 +693,59 @@ export const mockBusinessSettings: BusinessSettings = {
   ],
 };
 
+export const mockDeliveryZones: DeliveryZone[] = [
+  {
+    id: 'zone-1',
+    version: 1,
+    name: 'Zona Centro (Miraflores)',
+    feeMinor: 150,
+    fee: 1.5,
+    minOrderMinor: 500,
+    minOrder: 5.0,
+    priority: 1,
+    active: true,
+    polygonGeojson: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [-77.035, -12.122],
+          [-77.028, -12.12],
+          [-77.025, -12.128],
+          [-77.033, -12.13],
+          [-77.035, -12.122],
+        ],
+      ],
+    },
+  },
+  {
+    id: 'zone-2',
+    version: 1,
+    name: 'Zona Norte Express (San Isidro)',
+    feeMinor: 250,
+    fee: 2.5,
+    minOrderMinor: 1000,
+    minOrder: 10.0,
+    priority: 2,
+    active: true,
+    polygonGeojson: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [-77.04, -12.095],
+          [-77.03, -12.093],
+          [-77.028, -12.105],
+          [-77.038, -12.107],
+          [-77.04, -12.095],
+        ],
+      ],
+    },
+  },
+];
+
 export const mockDeliverySettings: DeliverySettings = {
   maxCoverageRadiusKm: 7.0,
-  baseDeliveryFee: 2.00,
-  perKmFee: 0.50,
+  baseDeliveryFee: 2.0,
+  perKmFee: 0.5,
   estimatedPrepTimeMin: 20,
   estimatedTransitTimeMin: 20,
 };

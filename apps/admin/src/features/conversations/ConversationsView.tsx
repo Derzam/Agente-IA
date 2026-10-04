@@ -8,17 +8,27 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/common/Button';
+import { Modal } from '@/components/common/Modal';
 import { ConversationStatusBadge } from '@/components/common/StatusBadge';
 import { VersionConflictNotice } from '@/components/common/VersionConflictNotice';
 import { ApiErrorBanner } from '@/components/common/ApiErrorBanner';
 import { conversationService } from '@/services/conversationService';
 import { orderService } from '@/services/orderService';
 import { ConversationSummary, ChatMessage, Order } from '@/types/viewModels';
+import type { HandoffReason } from '@agente-ia/shared';
 import { useSession } from '@/auth/SessionContext';
 import { usePolling } from '@/hooks/usePolling';
 import { VersionConflictError, NetworkError } from '@/api/types';
 import { newIdempotencyKey } from '@/services/apiClient';
 import { NavItemKey } from '@/components/layout/Sidebar';
+
+const CANONICAL_REASONS: { id: HandoffReason; label: string }[] = [
+  { id: 'explicit_request', label: 'Solicitud explícita del cliente' },
+  { id: 'misunderstanding', label: 'La IA no entiende la petición' },
+  { id: 'complaint', label: 'Reclamo o insatisfacción' },
+  { id: 'payment_issue', label: 'Problema con el método de pago' },
+  { id: 'system_failure', label: 'Falla técnica o del sistema' },
+];
 
 interface ConversationsViewProps {
   initialConversationId?: string;
@@ -42,6 +52,11 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [conflictError, setConflictError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<Error | null>(null);
+
+  // Handoff Request Modal State
+  const [isHandoffModalOpen, setIsHandoffModalOpen] = useState(false);
+  const [selectedReason, setSelectedReason] = useState<HandoffReason>('explicit_request');
+  const [handoffContext, setHandoffContext] = useState('');
 
   // Retain keys on network error
   const retainedMessageKeysRef = useRef<Map<string, string>>(new Map());
@@ -145,6 +160,41 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
       } else if (err instanceof NetworkError) {
         retainedMessageKeysRef.current.set(gestureKey, keyToUse);
         setActionError(err);
+      } else {
+        setActionError(err);
+      }
+    }
+  };
+
+  const handleConfirmHandoff = async () => {
+    if (!selectedConvId) return;
+    setConflictError(null);
+    setActionError(null);
+
+    const currentConv = conversations.find((c) => c.id === selectedConvId);
+    const operatorUserId = user?.id || 'usr-operator-001';
+
+    try {
+      await conversationService.requestHandoff(
+        selectedConvId,
+        selectedReason,
+        currentConv?.version || 1,
+        handoffContext.trim() || null
+      );
+      const updated = await conversationService.takeoverConversation(
+        selectedConvId,
+        operatorUserId,
+        undefined,
+        (currentConv?.version || 1) + 1
+      );
+      setConversations((prev) => prev.map((c) => (c.id === selectedConvId ? updated : c)));
+      loadMessages(selectedConvId);
+      setIsHandoffModalOpen(false);
+      setHandoffContext('');
+    } catch (err: any) {
+      if (err instanceof VersionConflictError) {
+        setConflictError(err.message);
+        await loadConversations();
       } else {
         setActionError(err);
       }
@@ -390,10 +440,10 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={handleTakeover}
+                    onClick={() => setIsHandoffModalOpen(true)}
                     leftIcon={<UserCheck className="w-4 h-4" />}
                   >
-                    Intervenir
+                    Solicitar Handoff
                   </Button>
                 )}
                 {currentConv.status === 'human_active' && (
@@ -549,6 +599,31 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
             </div>
           </div>
 
+          {/* Handoff Status Card if active or pending */}
+          {(currentConv.status === 'human_pending' || currentConv.status === 'human_active' || currentConv.handoffId) && (
+            <div className="bg-amber-50 p-3.5 rounded-xl border border-amber-200 space-y-1.5 text-xs text-amber-900">
+              <h5 className="font-bold text-[11px] uppercase tracking-wide text-amber-800">
+                Estado de Handoff Humano
+              </h5>
+              <div className="space-y-1 text-[11px]">
+                <p>
+                  <span className="font-semibold">Estado:</span>{' '}
+                  <span className="capitalize">{currentConv.handoffStatus || (currentConv.status === 'human_pending' ? 'Pendiente' : 'Activo')}</span>
+                </p>
+                <p>
+                  <span className="font-semibold">Motivo:</span>{' '}
+                  <span>
+                    {CANONICAL_REASONS.find((r) => r.id === currentConv.handoffReason)?.label || currentConv.handoffReason || 'Solicitud de intervención'}
+                  </span>
+                </p>
+                <p>
+                  <span className="font-semibold">Operador:</span>{' '}
+                  <span>{currentConv.assignedOperatorName || 'Sin asignar'}</span>
+                </p>
+              </div>
+            </div>
+          )}
+
           {activeOrder && (
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -583,6 +658,70 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
           )}
         </div>
       )}
+
+      {/* HANDOFF CREATION MODAL */}
+      <Modal
+        isOpen={isHandoffModalOpen}
+        onClose={() => setIsHandoffModalOpen(false)}
+        title="Solicitar Handoff a Operador Humano"
+        maxWidth="md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setIsHandoffModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={handleConfirmHandoff}
+              leftIcon={<UserCheck className="w-4 h-4" />}
+            >
+              Iniciar Handoff & Tomar Control
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4 text-xs sm:text-sm">
+          <p className="text-slate-600">
+            Pausará las respuestas automáticas del bot de WhatsApp para la conversación con{' '}
+            <span className="font-bold text-slate-900">{currentConv?.customerName}</span>.
+          </p>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Motivo canónico del Handoff (Requerido):
+            </label>
+            <select
+              value={selectedReason}
+              onChange={(e) => setSelectedReason(e.target.value as HandoffReason)}
+              className="w-full text-xs p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+            >
+              {CANONICAL_REASONS.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.label} ({r.id})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Contexto o notas del operador (opcional):
+            </label>
+            <textarea
+              rows={2}
+              value={handoffContext}
+              onChange={(e) => setHandoffContext(e.target.value)}
+              placeholder="ej. El cliente tiene dudas sobre ingredientes específicos..."
+              className="w-full text-xs p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+            />
+          </div>
+
+          <p className="text-[11px] text-slate-400 italic">
+            Esta acción se registrará formalmente mediante POST /conversations/{currentConv?.id}/handoffs.
+          </p>
+        </div>
+      </Modal>
     </div>
   );
 };
