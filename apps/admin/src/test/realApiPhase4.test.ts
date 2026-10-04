@@ -193,7 +193,97 @@ describe('Phase 4 Real API Integration Suite', () => {
         expect(err.code).toBe('VERSION_CONFLICT');
       }
     });
+
+    it('uses the canonical nested ModifierGroup endpoint with independent CAS', async () => {
+      const client = new ApiClient({
+        baseUrl: 'http://api.test/v1',
+        getActiveBusinessId: () => 'biz-01',
+      });
+      const spy = vi.spyOn(client, 'businessRequest').mockResolvedValue({
+        id: 'grp-01',
+        business_id: 'biz-01',
+        product_id: 'prod-01',
+        name: 'Extras',
+        required: false,
+        min_select: 0,
+        max_select: 2,
+        sort_order: 1,
+        active: true,
+        version: 3,
+        created_at: '2026-10-04T00:00:00Z',
+        updated_at: '2026-10-04T00:00:00Z',
+      });
+      const ep = new ApiEndpoints(client);
+
+      await ep.updateModifierGroup(
+        'prod-01',
+        'grp-01',
+        {
+          name: 'Extras premium',
+          sort_order: 2,
+          expected_version: 2,
+        },
+        'idem-group-1'
+      );
+
+      expect(spy).toHaveBeenCalledWith(
+        '/products/prod-01/modifier-groups/grp-01',
+        expect.objectContaining({
+          method: 'PATCH',
+          idempotencyKey: 'idem-group-1',
+          body: JSON.stringify({
+            name: 'Extras premium',
+            sort_order: 2,
+            expected_version: 2,
+          }),
+        })
+      );
+    });
+
+    it('serializes an explicit tax policy without inferring a rate', async () => {
+      const client = new ApiClient({
+        baseUrl: 'http://api.test/v1',
+        getActiveBusinessId: () => 'biz-01',
+      });
+      const spy = vi.spyOn(client, 'businessRequest').mockResolvedValue({
+        business_id: 'biz-01',
+        version: 5,
+        created_at: '2026-10-04T00:00:00Z',
+        updated_at: '2026-10-04T00:00:00Z',
+        opening_hours: [],
+        accepting_orders: true,
+        delivery_enabled: true,
+        pickup_enabled: true,
+        min_order_minor: 0,
+        session_ttl_minutes: 60,
+        ai_enabled: false,
+        tax_policy: { mode: 'none', rate_bps: 0, rounding: 'per_line_half_up' },
+      });
+      const ep = new ApiEndpoints(client);
+
+      await ep.updateSettings(
+        {
+          expected_version: 4,
+          tax_policy: { mode: 'none', rate_bps: 0, rounding: 'per_line_half_up' },
+        },
+        'idem-tax-1'
+      );
+
+      expect(spy).toHaveBeenCalledWith(
+        '/settings',
+        expect.objectContaining({
+          method: 'PATCH',
+          idempotencyKey: 'idem-tax-1',
+          body: JSON.stringify({
+            expected_version: 4,
+            tax_policy: { mode: 'none', rate_bps: 0, rounding: 'per_line_half_up' },
+          }),
+        })
+      );
+    });
   });
+
+
 
   // -------------------------------------------------------------
   // 4. ORDERS & LIFECYCLE
