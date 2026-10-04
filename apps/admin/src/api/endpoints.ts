@@ -4,10 +4,21 @@ import type {
   BusinessSettings,
   SettingsUpdate,
   Category,
+  CategoryInput,
+  CategoryUpdate,
   Product,
+  ProductInput,
   ProductUpdate,
+  ProductOption,
+  ProductOptionInput,
+  ProductOptionUpdate,
   Order,
   OrderTransitionInput,
+  Payment,
+  PaymentRecordInput,
+  DeliveryZone,
+  DeliveryZoneInput,
+  DeliveryZoneUpdate,
   Customer,
   Conversation,
   Message,
@@ -60,6 +71,52 @@ export class ApiEndpoints {
     return this.client.businessRequest<Category[]>('/categories', { ...options, businessId });
   }
 
+  async createCategory(
+    input: CategoryInput,
+    idempotencyKey?: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<Category> {
+    return this.client.businessRequest<Category>('/categories', {
+      ...options,
+      businessId,
+      method: 'POST',
+      idempotencyKey,
+      body: JSON.stringify(input),
+    });
+  }
+
+  async updateCategory(
+    categoryId: string,
+    update: CategoryUpdate,
+    idempotencyKey?: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<Category> {
+    return this.client.businessRequest<Category>(`/categories/${categoryId}`, {
+      ...options,
+      businessId,
+      method: 'PATCH',
+      idempotencyKey,
+      body: JSON.stringify(update),
+    });
+  }
+
+  async deleteCategory(
+    categoryId: string,
+    expectedVersion: number,
+    idempotencyKey?: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<Category> {
+    return this.client.businessRequest<Category>(`/categories/${categoryId}?expected_version=${expectedVersion}`, {
+      ...options,
+      businessId,
+      method: 'DELETE',
+      idempotencyKey,
+    });
+  }
+
   // /v1/businesses/{business_id}/products
   async getProducts(
     params?: { category_id?: string; available?: boolean },
@@ -71,6 +128,29 @@ export class ApiEndpoints {
     if (params?.available !== undefined) query.set('available', String(params.available));
     const qs = query.toString() ? `?${query.toString()}` : '';
     return this.client.businessRequest<Product[]>(`/products${qs}`, { ...options, businessId });
+  }
+
+  async getProductById(
+    productId: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<Product> {
+    return this.client.businessRequest<Product>(`/products/${productId}`, { ...options, businessId });
+  }
+
+  async createProduct(
+    input: ProductInput,
+    idempotencyKey?: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<Product> {
+    return this.client.businessRequest<Product>('/products', {
+      ...options,
+      businessId,
+      method: 'POST',
+      idempotencyKey,
+      body: JSON.stringify(input),
+    });
   }
 
   async updateProduct(
@@ -87,6 +167,74 @@ export class ApiEndpoints {
       idempotencyKey,
       body: JSON.stringify(update),
     });
+  }
+
+  async deleteProduct(
+    productId: string,
+    expectedVersion: number,
+    idempotencyKey?: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<Product> {
+    return this.client.businessRequest<Product>(`/products/${productId}?expected_version=${expectedVersion}`, {
+      ...options,
+      businessId,
+      method: 'DELETE',
+      idempotencyKey,
+    });
+  }
+
+  // /v1/businesses/{business_id}/products/{product_id}/options
+  async createProductOption(
+    productId: string,
+    input: ProductOptionInput,
+    idempotencyKey?: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<ProductOption> {
+    return this.client.businessRequest<ProductOption>(`/products/${productId}/options`, {
+      ...options,
+      businessId,
+      method: 'POST',
+      idempotencyKey,
+      body: JSON.stringify(input),
+    });
+  }
+
+  async updateProductOption(
+    productId: string,
+    optionId: string,
+    update: ProductOptionUpdate,
+    idempotencyKey?: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<ProductOption> {
+    return this.client.businessRequest<ProductOption>(`/products/${productId}/options/${optionId}`, {
+      ...options,
+      businessId,
+      method: 'PATCH',
+      idempotencyKey,
+      body: JSON.stringify(update),
+    });
+  }
+
+  async deleteProductOption(
+    productId: string,
+    optionId: string,
+    expectedVersion: number,
+    idempotencyKey?: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<ProductOption> {
+    return this.client.businessRequest<ProductOption>(
+      `/products/${productId}/options/${optionId}?expected_version=${expectedVersion}`,
+      {
+        ...options,
+        businessId,
+        method: 'DELETE',
+        idempotencyKey,
+      }
+    );
   }
 
   // /v1/businesses/{business_id}/orders
@@ -122,6 +270,92 @@ export class ApiEndpoints {
       idempotencyKey,
       body: JSON.stringify(input),
     });
+  }
+
+  // /v1/businesses/{business_id}/orders/{order_id}/payments
+  async getOrderPayments(
+    orderId: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<Payment[]> {
+    return this.client.businessRequest<Payment[]>(`/orders/${orderId}/payments`, {
+      ...options,
+      businessId,
+    });
+  }
+
+  // /v1/businesses/{business_id}/orders/{order_id}/payments/cash-record
+  async recordCashPayment(
+    orderId: string,
+    input: PaymentRecordInput,
+    idempotencyKey: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<Payment> {
+    return this.client.businessRequest<Payment>(`/orders/${orderId}/payments/cash-record`, {
+      ...options,
+      businessId,
+      method: 'POST',
+      idempotencyKey,
+      body: JSON.stringify(input),
+    });
+  }
+
+  // /v1/businesses/{business_id}/delivery-zones
+  async getDeliveryZones(businessId?: string, options?: RequestOptions): Promise<DeliveryZone[]> {
+    return this.client.businessRequest<DeliveryZone[]>('/delivery-zones', {
+      ...options,
+      businessId,
+    });
+  }
+
+  async createDeliveryZone(
+    input: DeliveryZoneInput,
+    idempotencyKey?: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<DeliveryZone> {
+    return this.client.businessRequest<DeliveryZone>('/delivery-zones', {
+      ...options,
+      businessId,
+      method: 'POST',
+      idempotencyKey,
+      body: JSON.stringify(input),
+    });
+  }
+
+  async updateDeliveryZone(
+    zoneId: string,
+    update: DeliveryZoneUpdate,
+    idempotencyKey?: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<DeliveryZone> {
+    return this.client.businessRequest<DeliveryZone>(`/delivery-zones/${zoneId}`, {
+      ...options,
+      businessId,
+      method: 'PATCH',
+      idempotencyKey,
+      body: JSON.stringify(update),
+    });
+  }
+
+  async deleteDeliveryZone(
+    zoneId: string,
+    expectedVersion: number,
+    idempotencyKey?: string,
+    businessId?: string,
+    options?: RequestOptions
+  ): Promise<DeliveryZone> {
+    return this.client.businessRequest<DeliveryZone>(
+      `/delivery-zones/${zoneId}?expected_version=${expectedVersion}`,
+      {
+        ...options,
+        businessId,
+        method: 'DELETE',
+        idempotencyKey,
+      }
+    );
   }
 
   // /v1/businesses/{business_id}/customers

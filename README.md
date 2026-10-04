@@ -51,7 +51,9 @@ Ambas ramas parten del mismo commit de `main`. Cada agente debe limitar sus camb
 
 ## Estado
 
-Fase 2: backend ejecutable con health/readiness, JWT Supabase, `/v1/me`, lectura de negocio e inbox WhatsApp firmado/deduplicado. Migración de cuatro tablas probada en PostgreSQL aislado. Sin conexión a un número Meta/proyecto Supabase real, IA, pedidos o pagos. [Estado IMPLEMENTED/PARTIAL/PLANNED y ejecución](docs/phase-02/implementation.md), [arquitectura](docs/architecture/README.md), [API](docs/api/contracts.md).
+Fase 3: esquema de dominio con 23 tablas adicionales, RLS forzado y roles restringidos aplicado exclusivamente en agente-ia-staging. [Implementación y límites](docs/phase-03/domain-schema.md), [validación de staging](docs/phase-03/staging-validation.md) y [compatibilidad de modificadores](docs/phase-03/modifier-compatibility.md). No habilita worker, IA, pedidos reales ni envío WhatsApp.
+
+Base de Fase 2: backend ejecutable con health/readiness, JWT Supabase, `/v1/me`, lectura de negocio e inbox WhatsApp firmado/deduplicado. Su foundation fue validada en staging durante Fase 2.1. Runtime completo de Auth/Meta aún pendiente. [Ejecución](docs/phase-02/implementation.md), [arquitectura](docs/architecture/README.md), [API](docs/api/contracts.md).
 
 ```sh
 npm ci

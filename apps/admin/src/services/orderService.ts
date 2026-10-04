@@ -1,4 +1,4 @@
-import type { Order, OrderStatus } from '@/types/viewModels';
+import type { Order, OrderPayment, OrderStatus } from '@/types/viewModels';
 import type { OrderAction } from '@agente-ia/shared';
 import { mockOrders } from '@/mocks/mockData';
 import { USE_MOCK_DATA, newIdempotencyKey } from './apiClient';
@@ -114,5 +114,69 @@ export const orderService = {
     options?: RequestOptions
   ): Promise<Order> {
     return this.transitionOrder(id, 'cancel', expectedVersion, reason, idempotencyKey, options);
+  },
+
+  /**
+   * Registers a manual cash payment via POST /orders/{id}/payments/cash-record.
+   * Strictly adheres to OpenAPI specification and requires expected_version and Idempotency-Key.
+   */
+  async recordCashPayment(
+    orderId: string,
+    expectedVersion: number,
+    note = 'Pago en efectivo recibido',
+    paidAt?: string,
+    idempotencyKey?: string,
+    options?: RequestOptions
+  ): Promise<Order> {
+    const key = idempotencyKey || newIdempotencyKey();
+    const timestamp = paidAt || new Date().toISOString();
+
+    if (USE_MOCK_DATA) {
+      const index = localOrders.findIndex((o) => o.id === orderId);
+      if (index === -1) throw new Error('Order not found');
+
+      const current = localOrders[index];
+      const updatedPayment: OrderPayment = {
+        id: current.payment?.id || `pay-${orderId}`,
+        orderId,
+        method: 'cash_on_delivery',
+        status: 'paid',
+        amountMinor: current.totalMinor || Math.round(current.total * 100),
+        amount: current.total,
+        currency: current.currency || 'USD',
+        paidAt: timestamp,
+        notes: note,
+        version: (current.payment?.version || 1) + 1,
+      };
+
+      const updated: Order = {
+        ...current,
+        paymentStatus: 'paid',
+        payment: updatedPayment,
+        version: (current.version || 1) + 1,
+        updatedAt: new Date().toISOString(),
+      };
+
+      localOrders[index] = updated;
+      return Promise.resolve(updated);
+    }
+
+    await endpoints.recordCashPayment(
+      orderId,
+      {
+        expected_version: expectedVersion,
+        note,
+        paid_at: timestamp,
+      },
+      key,
+      undefined,
+      options
+    );
+
+    const refreshed = await this.getOrderById(orderId, options);
+    if (!refreshed) {
+      throw new Error(`Order ${orderId} not found after payment recording`);
+    }
+    return refreshed;
   },
 };

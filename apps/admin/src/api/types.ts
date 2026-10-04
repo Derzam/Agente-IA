@@ -45,12 +45,13 @@ export class NormalizedApiError extends Error {
   }
 }
 
+export const VERSION_CONFLICT_MESSAGE =
+  'El registro cambió. Actualiza la información antes de continuar.';
+
 export class VersionConflictError extends NormalizedApiError {
   constructor(message?: string, requestId?: string) {
     super({
-      message:
-        message ||
-        'Este registro cambió. Revisa la nueva información antes de volver a ejecutar la acción.',
+      message: message || VERSION_CONFLICT_MESSAGE,
       code: 'VERSION_CONFLICT',
       status: 409,
       retryable: false,

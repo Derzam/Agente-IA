@@ -1,6 +1,6 @@
 # Modelo de datos MVP — fuente de verdad
 
-PARTIAL en fase 2: businesses, business_memberships, whatsapp_channels y webhook_events tienen [migración y tests locales](../phase-02/implementation.md). Resto de tablas PLANNED. No se ha aplicado SQL a producción.
+IMPLEMENTED en fase 3: esquema persistente de 27 tablas, RLS forzado, roles y constraints, probado localmente y aplicado solo en agente-ia-staging. Las cuatro tablas foundation se conservan. PARTIAL: reglas que requieren servicios transaccionales de acciones, cálculo/cotización y procesamiento. Worker, OpenAI y envío Meta permanecen PLANNED. Ver [implementación y límites de fase 3](../phase-03/domain-schema.md). No se ha aplicado SQL a producción.
 
 ## Convenciones obligatorias
 
@@ -25,7 +25,8 @@ Campos listados se suman a las convenciones anteriores. `?` indica NULL permitid
 | messages / historial canal | conversation_id, direction(inbound/outbound), provider_message_id?, kind(text/interactive/location/unsupported), content JSONB?, actor_type(customer/bot/human/system), delivery_status?, provider_timestamp?, outbox_id? | UNIQUE(business_id,provider_message_id) WHERE no NULL; UNIQUE outbox_id WHERE no NULL; índice(conversation_id,created_at,id); coordenadas validadas | retención/anónimos, no soft delete operacional |
 | categories / menú | name, sort_order, active | índice(business_id,active,sort_order); nombre normalizado único entre no borradas | deleted_at |
 | products / fuente de precio | category_id, name, description?, price_minor, currency, available, image_url? | CHECK price >=0; índice(business_id,available,category_id); image URL HTTPS con allowlist | deleted_at; snapshots históricos independientes |
-| product_options / extras | product_id, group_key, name, price_delta_minor, required, min_select, max_select, available | UNIQUE(business_id,product_id,group_key,name) entre activas; delta >=0; 0<=min<=max; consistencia grupo validada en servicio | deleted_at |
+| modifier_groups / selección del producto | product_id, name, required, min_select, max_select, sort_order, active | FK tenant+product; 0<=min<=max<=99; required implica min>=1; nombre normalizado único por producto no eliminado | deleted_at |
+| modifier_options / opciones del grupo | modifier_group_id, name, price_delta_minor, available, sort_order | FK tenant+group; delta>=0 bigint; nombre normalizado único por grupo no eliminado | deleted_at |
 | carts / agregado editable | customer_id, conversation_id, status(active/converted/expired), currency, expires_at | parcial UNIQUE(business_id,conversation_id) WHERE active; índice expires_at/status | expirar; limpieza tras retención |
 | cart_items / selección | cart_id, product_id, selected_options JSONB(ids), options_fingerprint, quantity, notes? | UNIQUE(business_id,cart_id,product_id,options_fingerprint); qty 1–99; opciones del producto/tenant comprobadas; no precio autoritativo | hard delete al remover; auditoría de mutación |
 | addresses / entrega | customer_id, label?, address_text, latitude?, longitude?, instructions? | pares de coordenadas juntos, lat -90..90/lon -180..180; índice customer_id; no dirección del modelo sin confirmación | deleted_at; retención PII |
@@ -44,6 +45,12 @@ Campos listados se suman a las convenciones anteriores. `?` indica NULL permitid
 | tool_executions / efecto de herramienta | turn_id, action_index, tool_name, arguments_hash, arguments_redacted?, status(pending/completed/failed), result_redacted?, idempotency_key_id? | UNIQUE(business_id,turn_id,action_index); slot inmutable tras plan, argumentos cambiados rechazan; índices turn_id y status | TTL payload; conservar clave de efecto |
 
 Tablas adicionales son necesarias: memberships autoriza operadores, channels resuelve tenant, idempotency/outbox garantiza efectos, transitions permite auditar estado, challenges prueba confirmación y turns/executions permite recuperar planes sin repetir herramientas. No requieren nuevas funcionalidades de producto. El DTO Business añade business_id=id para uniformidad; no es una columna redundante de businesses. assigned_user_id del DTO Conversation se deriva del handoff abierto y no se duplica en conversations.
+
+La decisión canónica sustituye product_options por modifier_groups + modifier_options; no se crea una tabla product_options. El DTO público ProductOption permanece intacto como compatibilidad temporal. Ver [mapa y coordinación pendiente](../phase-03/modifier-compatibility.md).
+
+En fase 3, importes usan el dominio app.money_minor basado en bigint con rango 0–9007199254740991 y cantidades app.quantity basadas en integer 1–99. JSON usa validadores SECURITY INVOKER con campos permitidos, tipos y tamaños acotados. Settings conserva PK business_id; las otras 22 tablas nuevas incluyen UNIQUE(business_id,id). Referencias internas añaden FK de tenant, y cuando importa identidad también customer/conversation. Todos los vínculos históricos usan RESTRICT.
+
+El worker no tiene UPDATE(status) de orders ni modificación de snapshots. El dominio persistente rechaza estados/saltos inválidos, y el consumo de challenges comprueba hash, TTL, cliente, versión y mensaje interactive. No equivale a implementar un servicio de confirmación/cotización: ese servicio deberá validar evidencia del botón, catálogo vigente, horario, importes y registrar transición/audit/outbox en una sola transacción. Solo un migrador puede efectuar los cambios de estado en las pruebas de esta fase.
 
 ## Transacciones e invariantes
 

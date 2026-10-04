@@ -1,4 +1,4 @@
-name: Phase 2 Integration CI
+name: Domain and Integration CI
 
 on:
   pull_request:
@@ -10,6 +10,7 @@ on:
       - codex/phase-02-backend-foundation
       - antigravity/phase-02-api-adapters
       - integration/phase-02
+      - codex/phase-03-domain-schema
 
 permissions:
   contents: read
