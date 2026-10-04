@@ -102,11 +102,9 @@ export function mapDtoOrderToViewModel(
     total: minorToDecimal(dto.total_minor),
     totalMinor: dto.total_minor,
     currency: dto.currency,
-    paymentMethod: 'cash',
-    paymentStatus:
-      mappedPayment?.status === 'paid' || dto.status === 'delivered'
-        ? 'paid'
-        : (mappedPayment?.status || 'pending'),
+    paymentMethod: 'cash_on_delivery',
+    // Delivery completion never implies payment. Payment remains a separate aggregate.
+    paymentStatus: mappedPayment?.status || 'pending',
     payment: mappedPayment,
     deliveryAddress: mapAddressSnapshotToViewModel(dto.address_snapshot),
     kitchenNotes: dto.items.map((i) => i.notes).filter(Boolean).join(' | ') || undefined,
