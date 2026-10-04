@@ -228,6 +228,9 @@ export const conversationService = {
     expectedConversationVersion = 1,
     expectedHandoffVersion?: number
   ): Promise<ConversationSummary> {
+    if (!operatorUserId) {
+      throw new Error('Se requiere un usuario autenticado para tomar el control de la conversación.');
+    }
     if (USE_MOCK_DATA) {
       const index = localConversations.findIndex((c) => c.id === conversationId);
       if (index === -1) throw new Error('Conversation not found');
