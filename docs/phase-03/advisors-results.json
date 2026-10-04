@@ -1,0 +1,469 @@
+{
+  "project_ref": "pqffgbpbreuhivxxctvr",
+  "project_name": "agente-ia-staging",
+  "security": {
+    "lints": []
+  },
+  "performance": {
+    "lints": [
+      {
+        "name": "unused_index",
+        "title": "Unused Index",
+        "level": "INFO",
+        "facing": "EXTERNAL",
+        "categories": [
+          "PERFORMANCE"
+        ],
+        "description": "Detects if an index has never been used and may be a candidate for removal.",
+        "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index",
+        "count": 49,
+        "findings": [
+          {
+            "detail": "Index \\`businesses_status_idx\\` on table \\`app.businesses\\` has not been used",
+            "metadata": {
+              "name": "businesses",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`memberships_user_active_idx\\` on table \\`app.business_memberships\\` has not been used",
+            "metadata": {
+              "name": "business_memberships",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`channels_business_idx\\` on table \\`app.whatsapp_channels\\` has not been used",
+            "metadata": {
+              "name": "whatsapp_channels",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`webhook_channel_idx\\` on table \\`app.webhook_events\\` has not been used",
+            "metadata": {
+              "name": "webhook_events",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`webhook_pending_idx\\` on table \\`app.webhook_events\\` has not been used",
+            "metadata": {
+              "name": "webhook_events",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`customers_phone\\` on table \\`app.customers\\` has not been used",
+            "metadata": {
+              "name": "customers",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`conversations_status\\` on table \\`app.conversations\\` has not been used",
+            "metadata": {
+              "name": "conversations",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`messages_history\\` on table \\`app.messages\\` has not been used",
+            "metadata": {
+              "name": "messages",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`categories_menu\\` on table \\`app.categories\\` has not been used",
+            "metadata": {
+              "name": "categories",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`products_menu\\` on table \\`app.products\\` has not been used",
+            "metadata": {
+              "name": "products",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`delivery_zones_priority\\` on table \\`app.delivery_zones\\` has not been used",
+            "metadata": {
+              "name": "delivery_zones",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`carts_expiration\\` on table \\`app.carts\\` has not been used",
+            "metadata": {
+              "name": "carts",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`orders_status\\` on table \\`app.orders\\` has not been used",
+            "metadata": {
+              "name": "orders",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`handoffs_queue\\` on table \\`app.human_handoffs\\` has not been used",
+            "metadata": {
+              "name": "human_handoffs",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`audit_resource\\` on table \\`app.audit_logs\\` has not been used",
+            "metadata": {
+              "name": "audit_logs",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`audit_request\\` on table \\`app.audit_logs\\` has not been used",
+            "metadata": {
+              "name": "audit_logs",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`idempotency_expiration\\` on table \\`app.idempotency_keys\\` has not been used",
+            "metadata": {
+              "name": "idempotency_keys",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`outbox_queue\\` on table \\`app.outbox_events\\` has not been used",
+            "metadata": {
+              "name": "outbox_events",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`turns_queue\\` on table \\`app.conversation_turns\\` has not been used",
+            "metadata": {
+              "name": "conversation_turns",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`tools_status\\` on table \\`app.tool_executions\\` has not been used",
+            "metadata": {
+              "name": "tool_executions",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`messages_business_id_outbox_id_conversation_id_fkey_idx\\` on table \\`app.messages\\` has not been used",
+            "metadata": {
+              "name": "messages",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`conversations_summary_message_fk_idx\\` on table \\`app.conversations\\` has not been used",
+            "metadata": {
+              "name": "conversations",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`conversations_business_id_customer_id_fkey_idx\\` on table \\`app.conversations\\` has not been used",
+            "metadata": {
+              "name": "conversations",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`conversations_business_id_channel_id_fkey_idx\\` on table \\`app.conversations\\` has not been used",
+            "metadata": {
+              "name": "conversations",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`products_business_id_category_id_fkey_idx\\` on table \\`app.products\\` has not been used",
+            "metadata": {
+              "name": "products",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`payments_business_id_recorded_by_fkey_idx\\` on table \\`app.payments\\` has not been used",
+            "metadata": {
+              "name": "payments",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`outbox_events_business_id_conversation_id_fkey_idx\\` on table \\`app.outbox_events\\` has not been used",
+            "metadata": {
+              "name": "outbox_events",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`modifier_groups_business_id_product_id_fkey_idx\\` on table \\`app.modifier_groups\\` has not been used",
+            "metadata": {
+              "name": "modifier_groups",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`modifier_options_business_id_modifier_group_id_fkey_idx\\` on table \\`app.modifier_options\\` has not been used",
+            "metadata": {
+              "name": "modifier_options",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`addresses_business_id_customer_id_fkey_idx\\` on table \\`app.addresses\\` has not been used",
+            "metadata": {
+              "name": "addresses",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`carts_business_id_customer_id_fkey_idx\\` on table \\`app.carts\\` has not been used",
+            "metadata": {
+              "name": "carts",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`carts_business_id_conversation_id_customer_id_fkey_idx\\` on table \\`app.carts\\` has not been used",
+            "metadata": {
+              "name": "carts",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`cart_items_business_id_product_id_fkey_idx\\` on table \\`app.cart_items\\` has not been used",
+            "metadata": {
+              "name": "cart_items",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`orders_business_id_customer_id_fkey_idx\\` on table \\`app.orders\\` has not been used",
+            "metadata": {
+              "name": "orders",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`orders_business_id_conversation_id_customer_id_fkey_idx\\` on table \\`app.orders\\` has not been used",
+            "metadata": {
+              "name": "orders",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`orders_business_id_source_cart_id_customer_id_conversation_fkey\\` on table \\`app.orders\\` has not been used",
+            "metadata": {
+              "name": "orders",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`orders_business_id_zone_id_fkey_idx\\` on table \\`app.orders\\` has not been used",
+            "metadata": {
+              "name": "orders",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`orders_business_id_confirmation_message_id_conversation_id_fkey\\` on table \\`app.orders\\` has not been used",
+            "metadata": {
+              "name": "orders",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`order_items_business_id_order_id_fkey_idx\\` on table \\`app.order_items\\` has not been used",
+            "metadata": {
+              "name": "order_items",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`order_items_business_id_product_id_fkey_idx\\` on table \\`app.order_items\\` has not been used",
+            "metadata": {
+              "name": "order_items",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`human_handoffs_business_id_conversation_id_fkey_idx\\` on table \\`app.human_handoffs\\` has not been used",
+            "metadata": {
+              "name": "human_handoffs",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`human_handoffs_business_id_assigned_user_id_fkey_idx\\` on table \\`app.human_handoffs\\` has not been used",
+            "metadata": {
+              "name": "human_handoffs",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`confirmation_challenges_business_id_order_id_customer_id_c_fkey\\` on table \\`app.confirmation_challenges\\` has not been used",
+            "metadata": {
+              "name": "confirmation_challenges",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`confirmation_challenges_business_id_customer_id_fkey_idx\\` on table \\`app.confirmation_challenges\\` has not been used",
+            "metadata": {
+              "name": "confirmation_challenges",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`confirmation_challenges_business_id_conversation_id_custom_fkey\\` on table \\`app.confirmation_challenges\\` has not been used",
+            "metadata": {
+              "name": "confirmation_challenges",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`confirmation_challenges_business_id_confirmation_message_i_fkey\\` on table \\`app.confirmation_challenges\\` has not been used",
+            "metadata": {
+              "name": "confirmation_challenges",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`conversation_turns_business_id_conversation_id_fkey_idx\\` on table \\`app.conversation_turns\\` has not been used",
+            "metadata": {
+              "name": "conversation_turns",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`conversation_turns_business_id_inbound_message_id_conversa_fkey\\` on table \\`app.conversation_turns\\` has not been used",
+            "metadata": {
+              "name": "conversation_turns",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          },
+          {
+            "detail": "Index \\`tool_executions_business_id_idempotency_key_id_fkey_idx\\` on table \\`app.tool_executions\\` has not been used",
+            "metadata": {
+              "name": "tool_executions",
+              "type": "table",
+              "schema": "app"
+            },
+            "observed_at": "2026-10-04T01:28:55.555Z"
+          }
+        ]
+      }
+    ]
+  },
+  "normalized_sql_sha256": "8c74c4884604a4b3f6ac7995ef87d91b8e55bdb4995aee38f5487d4850f1085c",
+  "local_migration": "20261004010809_domain_schema.sql",
+  "remote_migration_version": "20261004012831"
+}

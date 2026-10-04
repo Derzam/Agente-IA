@@ -2,6 +2,8 @@
 
 Especificación máquina: [openapi.json](openapi.json), OpenAPI 3.1. Tipos: [packages/shared](../../packages/shared/README.md). IMPLEMENTED: GET /v1/me, GET negocio, GET/POST webhook y GET health/ready; resto PLANNED. Backend local sin URL pública ni Supabase/Meta reales conectados. [Límites y ejecución](../phase-02/implementation.md), [extensión justificada](../phase-02/openapi-compatibility.md). Los ejemplos usan UUID ficticios y datos sintéticos.
 
+Fase 3 amplía exclusivamente persistencia en Supabase staging: modifier_groups + modifier_options reemplazan el diseño SQL preliminar product_options. ProductOption y las rutas /options conservan su contrato público y permanecen PLANNED; no se conecta una proyección ficticia al panel. [Compatibilidad temporal y coordinación requerida](../phase-03/modifier-compatibility.md). OpenAPI y shared no cambian en esta fase.
+
 ## Reglas comunes
 
 Base `/v1/businesses/{business_id}`. JWT Supabase en `Authorization: Bearer …`; comprobar membership activa por request y rol, nunca confiar en business_id del cuerpo. Recurso ajeno/inexistente →404; membership ausente →403. Read roles O/M/A: operator/manager/owner. Gestión M/A: manager/owner. Restricciones por estado y asignación se aplican además del rol.

@@ -33,12 +33,15 @@ export async function checkDatabaseRole(pool: pg.Pool, kind: 'api' | 'ingress'):
     const result = await client.query<{ safe: boolean }>(`
       SELECT NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreaterole AND NOT r.rolcreatedb
         AND pg_has_role(current_user, $1, 'member') AND NOT pg_has_role(current_user, $2, 'member')
+        AND NOT EXISTS(SELECT 1 FROM pg_roles w WHERE w.rolname='app_worker' AND pg_has_role(current_user,w.oid,'member'))
         AND NOT has_schema_privilege(current_user,'app','CREATE')
         AND NOT EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
           WHERE n.nspname='app' AND pg_has_role(current_user,c.relowner,'member'))
         AND 4=(SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
           WHERE n.nspname='app' AND c.relname IN ('businesses','business_memberships','whatsapp_channels','webhook_events')
             AND c.relrowsecurity AND c.relforcerowsecurity)
+        AND NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+          WHERE n.nspname='app' AND c.relkind='r' AND (NOT c.relrowsecurity OR NOT c.relforcerowsecurity))
         AS safe FROM pg_roles r WHERE r.rolname=current_user`, [role, forbidden]);
     if (result.rows[0]?.safe !== true) throw unavailable();
     await client.query('SELECT 1');
