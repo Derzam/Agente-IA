@@ -132,11 +132,23 @@ export class MetaDispatcher {
         );
         return null;
       }
-      if (
-        !(await rate(r, "outbound", "tenant", 60)) ||
-        !(await rate(r, "outbound", c.customer_id, 10))
-      )
+      // Reserve both scopes atomically; a blocked customer must not spend tenant quota.
+      await r.db.query("SAVEPOINT meta_rate");
+      const rateError = !(await rate(r, "outbound", "tenant", 60))
+        ? "META_TENANT_RATE_LIMITED"
+        : !(await rate(r, "outbound", c.customer_id, 10))
+          ? "META_CUSTOMER_RATE_LIMITED"
+          : undefined;
+      if (rateError) {
+        await r.db.query("ROLLBACK TO SAVEPOINT meta_rate");
+        await r.db.query("RELEASE SAVEPOINT meta_rate");
+        await r.db.query(
+          "UPDATE app.outbox_events SET next_attempt_at=date_trunc('minute',clock_timestamp())+interval '1 minute',last_error_code=$2 WHERE id=$1",
+          [o.id, rateError],
+        );
         return null;
+      }
+      await r.db.query("RELEASE SAVEPOINT meta_rate");
       const claimed = (
         await r.db.query(
           "UPDATE app.outbox_events SET status='sending',attempts=attempts+1,fencing_token=fencing_token+1,lease_until=clock_timestamp()+interval '45 seconds',transport_started_at=clock_timestamp(),last_error_code=NULL WHERE id=$1 RETURNING fencing_token",

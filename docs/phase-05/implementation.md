@@ -78,6 +78,8 @@ Circuitos por tenant/provider en PostgreSQL: tres fallos abren 60 s; half-open p
 
 Las ventanas DB requieren futura política de limpieza acotada; la migración no concede DELETE al runtime. Antes de producción definir retención y housekeeping administrativo. Los tenants comparten únicamente la protección de emergencia de ingress y capacidad física del proceso; sus presupuestos/circuitos/rate limits comerciales son independientes.
 
+Outbound reserva las cuotas tenant/customer en un savepoint. Si cualquiera excede el límite, revierte ambas reservas, difiere únicamente el evento bloqueado al próximo minuto y registra META_CUSTOMER_RATE_LIMITED o META_TENANT_RATE_LIMITED sin incrementar intentos ni crear intención HTTP. Así el customer saturado no consume cuota tenant sin enviar ni mantiene bloqueada la cabecera de la cola; otro customer elegible avanza en el siguiente tick.
+
 ## Meta y estados ambiguos
 
 Graph version por `META_GRAPH_API_VERSION`, origen HTTPS fijo `graph.facebook.com`, sin redirects, timeout configurado y respuesta limitada a 16 KiB. Env canonical META_*; WHATSAPP_* mantiene compatibilidad de ingreso. `META_WABA_ID` documentado pero no necesario para POST messages. `META_SANDBOX_RECIPIENTS` es una allowlist explícita obligatoria; nadie puede elegir recipient desde tool.

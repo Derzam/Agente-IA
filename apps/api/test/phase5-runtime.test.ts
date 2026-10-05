@@ -960,6 +960,82 @@ test("concurrent Meta claims dispatch once and provider rejection dead-letters",
     "dead_letter",
   );
 });
+for (const blockedScope of ["customer", "tenant"] as const)
+  test(`Meta ${blockedScope} quota defers the row without spending partial quota`, async () => {
+    const f = await fixture();
+    await harness(f, { respond: async () => reply() }).run(f.tenant, f.inbound);
+    const otherCustomer = await insert("customers", {
+        business_id: f.tenant,
+        channel_user_id: f.recipient + "1",
+      }),
+      otherConversation = await insert("conversations", {
+        business_id: f.tenant,
+        customer_id: otherCustomer.id,
+        channel_id: f.channel,
+        expires_at: new Date(Date.now() + 3600000),
+        last_customer_message_at: new Date(),
+      }),
+      otherInbound = await insert("messages", {
+        business_id: f.tenant,
+        conversation_id: otherConversation.id,
+        direction: "inbound",
+        kind: "text",
+        content: { text: "Menú" },
+        actor_type: "customer",
+        provider_message_id: "wamid.other." + randomUUID(),
+      });
+    f.config.meta.recipients.push(otherCustomer.channel_user_id);
+    await harness({
+      ...f,
+      ctx: { tenant: f.tenant, customer: otherCustomer.id, conversation: otherConversation.id },
+      inbound: otherInbound.id,
+    }, { respond: async () => reply() }).run(f.tenant, otherInbound.id);
+    const blocked = (await admin.query(
+      "UPDATE app.outbox_events SET next_attempt_at=now()-interval '2 minutes' WHERE business_id=$1 AND event_type='whatsapp.message' AND conversation_id=$2 RETURNING *",
+      [f.tenant, f.ctx.conversation],
+    )).rows[0];
+    await admin.query(
+      "UPDATE app.outbox_events SET next_attempt_at=now()-interval '1 minute' WHERE business_id=$1 AND event_type='whatsapp.message' AND conversation_id=$2",
+      [f.tenant, otherConversation.id],
+    );
+    // Seed adjacent windows too, so crossing a minute boundary cannot weaken this test.
+    for (const [scope, count] of [
+      ["tenant", blockedScope === "tenant" ? 60 : 7],
+      [f.ctx.customer, blockedScope === "customer" ? 10 : 3],
+    ] as const)
+      await admin.query(
+        "INSERT INTO app.runtime_windows(business_id,kind,scope,window_start,count) SELECT $1,'outbound',$2,date_trunc('minute',clock_timestamp())+make_interval(mins=>n),$3 FROM generate_series(-1,1) n",
+        [f.tenant, scope, count],
+      );
+    const counters = async () => (await admin.query(
+      "SELECT scope,window_start,count FROM app.runtime_windows WHERE business_id=$1 AND kind='outbound' ORDER BY scope,window_start",
+      [f.tenant],
+    )).rows;
+    const before = await counters(), sent: string[] = [];
+    const dispatcher = new MetaDispatcher(worker, {
+      send: async (payload) => {
+        sent.push(payload.recipient);
+        return { kind: "accepted", id: "wamid.quota." + randomUUID() };
+      },
+    }, cipher, f.config, new RuntimeSafety(worker, f.config.budget));
+    assert.equal(await dispatcher.tick(f.tenant), false);
+    assert.deepEqual(await counters(), before);
+    const deferred = (await admin.query("SELECT * FROM app.outbox_events WHERE id=$1", [blocked.id])).rows[0];
+    assert.equal(deferred.status, "pending");
+    assert.equal(deferred.attempts, 0);
+    assert.equal(deferred.fencing_token, blocked.fencing_token);
+    assert.equal(deferred.transport_started_at, null);
+    assert.ok(deferred.next_attempt_at > new Date());
+    assert.equal(deferred.last_error_code, blockedScope === "customer" ? "META_CUSTOMER_RATE_LIMITED" : "META_TENANT_RATE_LIMITED");
+    assert.equal(await dispatcher.tick(f.tenant), blockedScope === "customer");
+    assert.deepEqual(sent, blockedScope === "customer" ? [otherCustomer.channel_user_id] : []);
+    if (blockedScope === "customer") {
+      const after = await counters();
+      assert.equal(after.filter(row => row.scope === "tenant").reduce((n, row) => n + Number(row.count), 0), 22);
+      assert.equal(after.filter(row => row.scope === f.ctx.customer).reduce((n, row) => n + Number(row.count), 0), 30);
+      assert.equal(after.filter(row => row.scope === otherCustomer.id).reduce((n, row) => n + Number(row.count), 0), 1);
+    } else assert.deepEqual(await counters(), before);
+  });
 test("definite Meta 429 is retried with backoff; fifth failure dead-letters", async () => {
   const f = await quoteFixture();
   const dispatcher = new MetaDispatcher(
