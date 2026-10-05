@@ -184,13 +184,18 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
     const gestureKey = `msg-${selectedConvId}-${Date.now()}`;
     const keyToUse = retainedMessageKeysRef.current.get(gestureKey) || newIdempotencyKey();
 
+    const lastPersistedMsg = [...messages].reverse().find((m) => m.deliveryStatus !== 'queued');
+    const anchorMessageId = lastPersistedMsg?.id || null;
+
     try {
       const newMsg = await conversationService.sendMessage(
         selectedConvId,
         textToSend,
         currentConv?.version || 1,
         isInternalNote,
-        keyToUse
+        keyToUse,
+        undefined,
+        anchorMessageId
       );
       retainedMessageKeysRef.current.delete(gestureKey);
       if (messagesContainerRef.current) {

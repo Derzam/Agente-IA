@@ -70,7 +70,8 @@ export const conversationService = {
     expectedConversationVersion = 1,
     isInternalNote = false,
     idempotencyKey?: string,
-    options?: RequestOptions
+    options?: RequestOptions,
+    anchorMessageId?: string | null
   ): Promise<ChatMessage> {
     const key = idempotencyKey || newIdempotencyKey();
 
@@ -84,6 +85,7 @@ export const conversationService = {
         content: text,
         timestamp: new Date().toISOString(),
         isInternalNote,
+        anchorMessageId: anchorMessageId ?? null,
       };
 
       if (!localMessages[conversationId]) {
@@ -130,6 +132,7 @@ export const conversationService = {
       timestamp: new Date().toISOString(),
       isInternalNote: false,
       outboxId: receipt?.outbox_id || null,
+      anchorMessageId: anchorMessageId ?? null,
       deliveryStatus: receipt?.status || 'queued',
     };
   },

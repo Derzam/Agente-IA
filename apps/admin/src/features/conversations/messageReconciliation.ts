@@ -44,10 +44,6 @@ export function reconcileConversationMessages(
       .filter((outboxId): outboxId is string => Boolean(outboxId))
   );
 
-  const oldestIncomingTime = sortedIncoming.length > 0
-    ? (Number.isNaN(Date.parse(sortedIncoming[0].timestamp)) ? 0 : Date.parse(sortedIncoming[0].timestamp))
-    : 0;
-
   const queued = previous.filter((message) => {
     if (message.conversationId !== conversationId || message.deliveryStatus !== 'queued') {
       return false;
@@ -63,13 +59,19 @@ export function reconcileConversationMessages(
 
     const msgTime = Number.isNaN(Date.parse(message.timestamp)) ? 0 : Date.parse(message.timestamp);
 
-    // 1. Expire receipts that exceed the TTL (e.g., after long inactive tab)
+    // 1. Expire receipts that exceed the TTL on the client clock (e.g., after long inactive tab)
     if (msgTime > 0 && nowMs - msgTime > QUEUED_RECEIPT_TTL_MS) {
       return false;
     }
 
-    // 2. Drop receipts that fall outside the bounded page window (when page is full with >= 20 newer messages)
-    if (sortedIncoming.length >= 20 && oldestIncomingTime > 0 && msgTime > 0 && msgTime < oldestIncomingTime) {
+    // 2. Drop receipts that fall outside the bounded page window using server-derived correlation metadata:
+    // If the receipt was anchored to a server message (anchorMessageId) and that anchor is no longer
+    // present in a saturated incoming page (>= 20 messages), its position has shifted off the page window.
+    if (
+      message.anchorMessageId &&
+      sortedIncoming.length >= 20 &&
+      !incomingIds.has(message.anchorMessageId)
+    ) {
       return false;
     }
 

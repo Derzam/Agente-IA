@@ -700,21 +700,22 @@ describe('Phase 5 Operations & Runtime UI Suite', () => {
       expect(reconciled).toHaveLength(0);
     });
 
-    it('drops queued receipts that fall outside the bounded page window (older than oldest message in page)', () => {
+    it('drops queued receipts whose server anchor message has fallen outside the bounded page window', () => {
       const previousWithReceipt: ChatMessage[] = [
         {
           id: 'outbox-receipt-before-page',
           outboxId: 'outbox-receipt-before-page',
+          anchorMessageId: 'msg-anchor-old',
           conversationId: 'conv-1',
           sender: 'staff',
           type: 'text',
-          content: 'Mensaje optimista anterior a la página actual',
+          content: 'Mensaje optimista anclado a un mensaje que ya cayó de la página',
           timestamp: '2026-10-04T10:00:00Z',
           deliveryStatus: 'queued',
         },
       ];
 
-      // Current page returns a full 20-message page strictly newer than the receipt
+      // Current page returns a full 20-message page where msg-anchor-old is no longer present
       const incomingPage: ChatMessage[] = Array.from({ length: 20 }, (_, i) => ({
         id: `msg-page-${i + 1}`,
         conversationId: 'conv-1',
@@ -725,7 +726,7 @@ describe('Phase 5 Operations & Runtime UI Suite', () => {
         deliveryStatus: 'read',
       }));
 
-      const nowMs = Date.parse('2026-10-04T10:06:00Z'); // within 5m TTL, but behind the 20-message bounded page
+      const nowMs = Date.parse('2026-10-04T10:01:00Z'); // within TTL, but anchor is evicted from page
 
       const reconciled = reconcileConversationMessages(
         previousWithReceipt,
@@ -739,6 +740,58 @@ describe('Phase 5 Operations & Runtime UI Suite', () => {
       expect(reconciled.some((m) => m.id === 'outbox-receipt-before-page')).toBe(false);
       expect(reconciled[0].id).toBe('msg-page-1');
       expect(reconciled[19].id).toBe('msg-page-20');
+    });
+
+    it('preserves queued receipts when anchor message is still within the bounded page window even if client clock trails', () => {
+      const previousWithReceipt: ChatMessage[] = [
+        {
+          id: 'outbox-receipt-active',
+          outboxId: 'outbox-receipt-active',
+          anchorMessageId: 'msg-anchor-present',
+          conversationId: 'conv-1',
+          sender: 'staff',
+          type: 'text',
+          content: 'Mensaje optimista recién enviado',
+          // Client clock trails server (timestamp is older than server messages)
+          timestamp: '2026-10-04T10:00:00Z',
+          deliveryStatus: 'queued',
+        },
+      ];
+
+      // Stale in-flight poll returned 20 messages, but still includes the anchor message
+      const incomingPage: ChatMessage[] = [
+        {
+          id: 'msg-anchor-present',
+          conversationId: 'conv-1',
+          sender: 'customer',
+          type: 'text',
+          content: 'Mensaje ancla',
+          timestamp: '2026-10-04T10:00:05Z', // server clock ahead
+          deliveryStatus: 'read',
+        },
+        ...Array.from({ length: 19 }, (_, i) => ({
+          id: `msg-page-${i + 1}`,
+          conversationId: 'conv-1',
+          sender: 'customer' as const,
+          type: 'text' as const,
+          content: `Mensaje ${i + 1}`,
+          timestamp: new Date(Date.parse('2026-10-04T10:00:06Z') + i * 1000).toISOString(),
+          deliveryStatus: 'read' as const,
+        })),
+      ];
+
+      const nowMs = Date.parse('2026-10-04T10:00:10Z');
+
+      const reconciled = reconcileConversationMessages(
+        previousWithReceipt,
+        incomingPage,
+        'conv-1',
+        nowMs
+      );
+
+      // Even with client clock trailing, the receipt is preserved because anchor is still in page!
+      expect(reconciled).toHaveLength(21);
+      expect(reconciled.some((m) => m.id === 'outbox-receipt-active')).toBe(true);
     });
 
     it('preserves scroll position without snapping to bottom when operator scrolled up during send', () => {

@@ -101,6 +101,7 @@ export interface ChatMessage {
   isInternalNote?: boolean;
   orderReferenceId?: string;
   outboxId?: string | null;
+  anchorMessageId?: string | null;
   deliveryStatus?: DeliveryStatus | null;
   failureCode?: string | null;
 }

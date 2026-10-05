@@ -98,6 +98,7 @@ export function mapDtoMessageToViewModel(
     timestamp: dto.created_at,
     isInternalNote: false,
     outboxId: dto.outbox_id ?? null,
+    anchorMessageId: null,
     deliveryStatus,
     failureCode,
   };
