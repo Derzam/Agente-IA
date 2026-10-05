@@ -8,6 +8,50 @@ import type {
   Row,
 } from "../../modules/domain/infrastructure/repository.js";
 import { audit, outbox } from "../../modules/domain/application/evidence.js";
+async function deliveryEvidence(
+  r: Repository,
+  before: Row,
+  changed: Row,
+  request: string,
+) {
+  if (before.delivery_status === changed.delivery_status) return;
+  await audit(
+    r,
+    { id: null, type: "system" },
+    request,
+    "message.delivery_status",
+    "message",
+    { ...changed, status: changed.delivery_status },
+    { ...before, status: before.delivery_status },
+  );
+  await outbox(
+    r, "message.delivery_updated", changed, request, changed.conversation_id,
+  );
+}
+async function transportDelivery(
+  r: Repository,
+  outboxId: string,
+  status: string,
+  from: string[],
+  providerId?: string,
+) {
+  const before = (
+    await r.db.query(
+      "SELECT * FROM app.messages WHERE business_id=$1 AND outbox_id=$2 FOR UPDATE",
+      [r.tenant, outboxId],
+    )
+  ).rows[0];
+  if (!before || !from.includes(before.delivery_status)) return;
+  if (
+    before.delivery_status === status &&
+    (!providerId || before.provider_message_id === providerId)
+  ) return;
+  const changed = await r.update("messages", before.id, {
+    delivery_status: status,
+    ...(providerId ? { provider_message_id: providerId } : {}),
+  });
+  await deliveryEvidence(r, before, changed, outboxId);
+}
 export class MetaDispatcher {
   constructor(
     private pool: pg.Pool,
@@ -26,10 +70,7 @@ export class MetaDispatcher {
         [tenant],
       );
       for (const row of expired.rows)
-        await r.db.query(
-          "UPDATE app.messages SET delivery_status='unknown' WHERE business_id=$1 AND outbox_id=$2 AND delivery_status='pending'",
-          [tenant, row.id],
-        );
+        await transportDelivery(r, row.id, "unknown", ["pending"]);
       const o = (
         await r.db.query(
           "SELECT * FROM app.outbox_events WHERE business_id=$1 AND event_type='whatsapp.message' AND (status='pending' OR (status='sending' AND transport_started_at IS NULL AND lease_until<=clock_timestamp())) AND next_attempt_at<=clock_timestamp() ORDER BY next_attempt_at,id FOR UPDATE SKIP LOCKED LIMIT 1",
@@ -126,10 +167,7 @@ export class MetaDispatcher {
           "UPDATE app.outbox_events SET status='dead_letter',lease_until=NULL,last_error_code=$2 WHERE id=$1",
           [o.id, error ?? "META_ATTEMPTS_EXCEEDED"],
         );
-        await r.db.query(
-          "UPDATE app.messages SET delivery_status='failed' WHERE business_id=$1 AND id=$2 AND delivery_status='pending'",
-          [tenant, m.id],
-        );
+        await transportDelivery(r, o.id, "failed", ["pending"]);
         return null;
       }
       // Reserve both scopes atomically; a blocked customer must not spend tenant quota.
@@ -198,9 +236,8 @@ export class MetaDispatcher {
           "UPDATE app.outbox_events SET status='sent',provider_message_id=$3,accepted_at=coalesce(accepted_at,clock_timestamp()),delivery_status=coalesce(delivery_status,'sent'),lease_until=NULL,last_error_code=NULL WHERE business_id=$1 AND id=$2",
           [tenant, work.id, result.id],
         );
-        await r.db.query(
-          "UPDATE app.messages SET provider_message_id=$3,delivery_status=CASE WHEN delivery_status IN ('pending','unknown') THEN 'sent' ELSE delivery_status END WHERE business_id=$1 AND outbox_id=$2",
-          [tenant, work.id, result.id],
+        await transportDelivery(
+          r, work.id, "sent", ["pending", "unknown"], result.id,
         );
       } else {
         const status =
@@ -213,17 +250,15 @@ export class MetaDispatcher {
           "UPDATE app.outbox_events SET status=$3,lease_until=NULL,last_error_code=$4,next_attempt_at=clock_timestamp()+make_interval(secs=>least(3600,power(2,attempts)::integer)),transport_started_at=CASE WHEN $3='pending' THEN NULL ELSE transport_started_at END WHERE business_id=$1 AND id=$2",
           [tenant, work.id, status, result.code],
         );
-        await r.db.query(
-          "UPDATE app.messages SET delivery_status=$3 WHERE business_id=$1 AND outbox_id=$2 AND delivery_status IN ('pending','unknown')",
-          [
-            tenant,
-            work.id,
-            status === "unknown"
-              ? "unknown"
-              : status === "dead_letter"
-                ? "failed"
-                : "pending",
-          ],
+        await transportDelivery(
+          r,
+          work.id,
+          status === "unknown"
+            ? "unknown"
+            : status === "dead_letter"
+              ? "failed"
+              : "pending",
+          ["pending", "unknown"],
         );
       }
     });
@@ -238,6 +273,8 @@ export async function reconcileStatus(
   const p = event.payload,
     status = p.content?.status;
   if (!p.provider_message_id || (!ranks[status] && status !== "failed"))
+    return true;
+  if (typeof p.provider_timestamp !== "string" || !Number.isFinite(Date.parse(p.provider_timestamp)))
     return true;
   const callback =
     typeof p.content?.callback === "string" &&
@@ -267,15 +304,21 @@ export async function reconcileStatus(
   ).rows[0];
   if (!o.transport_started_at && !o.provider_message_id) return true;
   if (
-    status === "failed" &&
     o.provider_status_at &&
     new Date(p.provider_timestamp) < o.provider_status_at
   )
     return true;
   if (o.provider_message_id && o.provider_message_id !== p.provider_message_id)
     return true;
+  if (status === m.delivery_status) {
+    // Refresh only the watermark: repeated states must not create versions/events.
+    await r.db.query(
+      "UPDATE app.outbox_events SET provider_status_at=$3 WHERE business_id=$1 AND id=$2 AND (provider_status_at IS NULL OR provider_status_at<$3)",
+      [r.tenant, o.id, p.provider_timestamp],
+    );
+    return true;
+  }
   if (
-    status === m.delivery_status ||
     (status === "failed" &&
       ["delivered", "read"].includes(m.delivery_status)) ||
     (ranks[status] && (ranks[status] ?? 0) <= (ranks[m.delivery_status] ?? 0))
@@ -292,21 +335,6 @@ export async function reconcileStatus(
     "UPDATE app.outbox_events SET status='sent',provider_message_id=$3,delivery_status=$4,provider_status_at=$5,accepted_at=coalesce(accepted_at,clock_timestamp()),lease_until=NULL,last_error_code=CASE WHEN $4='failed' THEN 'META_DELIVERY_FAILED' ELSE NULL END WHERE business_id=$1 AND id=$2",
     [r.tenant, o.id, p.provider_message_id, status, p.provider_timestamp],
   );
-  await audit(
-    r,
-    { id: null, type: "system" },
-    event.id,
-    "message.delivery_status",
-    "message",
-    { ...changed, status },
-    { ...m, status: m.delivery_status },
-  );
-  await outbox(
-    r,
-    "message.delivery_updated",
-    changed,
-    event.id,
-    m.conversation_id,
-  );
+  await deliveryEvidence(r, m, changed, event.id);
   return true;
 }

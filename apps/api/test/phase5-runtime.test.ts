@@ -391,7 +391,7 @@ test("signed HTTP inbound completes inbox, AI, deterministic tools, Meta accepta
       "delivered",
     );
     assert.equal((await app.inject({ url: "/ready" })).statusCode, 200);
-    assert.equal((await admin.query("SELECT count(*)::int n FROM app.outbox_events WHERE business_id=$1 AND event_type='message.delivery_updated'", [f.tenant])).rows[0].n, 1);
+    assert.equal((await admin.query("SELECT count(*)::int n FROM app.outbox_events WHERE business_id=$1 AND event_type='message.delivery_updated'", [f.tenant])).rows[0].n, 2);
     assert.ok(!JSON.stringify(events).includes(f.recipient));
     assert.ok(!JSON.stringify(events).includes("USD 5.00"));
   } finally {
@@ -803,6 +803,105 @@ test("Meta acceptance persists provider id and monotonic duplicated/out-of-order
     ).rows[0].delivery_status,
     "read",
   );
+});
+for (const initial of ["pending", "unknown"] as const)
+  test(`Meta acceptance emits sent evidence atomically from ${initial}, with duplicate callback ignored`, async () => {
+    const f = await quoteFixture(), id = "wamid.acceptance." + randomUUID();
+    const sent: string[] = [];
+    const dispatcher = new MetaDispatcher(worker, {
+      send: async () => {
+        sent.push(id);
+        if (initial === "unknown") {
+          await admin.query("UPDATE app.outbox_events SET status='unknown' WHERE id=$1", [f.outbox.id]);
+          await admin.query("UPDATE app.messages SET delivery_status='unknown' WHERE outbox_id=$1", [f.outbox.id]);
+        }
+        return { kind: "accepted", id };
+      },
+    }, cipher, f.config, new RuntimeSafety(worker, f.config.budget));
+    assert.ok(await dispatcher.tick(f.tenant));
+    const message = (await admin.query("SELECT * FROM app.messages WHERE outbox_id=$1", [f.outbox.id])).rows[0];
+    assert.equal(message.delivery_status, "sent");
+    assert.equal(message.provider_message_id, id);
+    const evidence = async () => (await admin.query("SELECT * FROM app.outbox_events WHERE business_id=$1 AND event_type='message.delivery_updated'", [f.tenant])).rows;
+    const events = await evidence();
+    assert.equal(events.length, 1);
+    assert.equal(events[0].aggregate_id, message.id);
+    assert.equal(events[0].aggregate_version, message.version);
+    assert.equal(events[0].conversation_id, message.conversation_id);
+    assert.equal(events[0].causation_id, f.outbox.id);
+    const entry = (await admin.query("SELECT * FROM app.audit_logs WHERE business_id=$1 AND action='message.delivery_status'", [f.tenant])).rows[0];
+    assert.equal(entry.before_redacted.status, initial);
+    assert.equal(entry.after_redacted.status, "sent");
+    assert.equal(entry.after_redacted.version, message.version);
+    await scoped(worker, f.tenant, r => reconcileStatus(r, {
+      id: randomUUID(), channel_id: f.channel, payload: {
+        provider_message_id: id, provider_timestamp: new Date().toISOString(), content: { status: "sent", callback: f.outbox.id },
+      },
+    }));
+    assert.equal(await dispatcher.tick(f.tenant), false);
+    assert.equal(sent.length, 1);
+    assert.equal((await evidence()).length, 1);
+    assert.equal((await admin.query("SELECT count(*)::int n FROM app.audit_logs WHERE business_id=$1 AND action='message.delivery_status'", [f.tenant])).rows[0].n, 1);
+  });
+test("failed acceptance evidence rolls back delivery and recovers unknown without resending", async () => {
+  const f = await quoteFixture();
+  await admin.query(`CREATE FUNCTION app.fail_delivery_evidence_test() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.business_id='${f.tenant}'::uuid AND NEW.event_type='message.delivery_updated' THEN RAISE EXCEPTION 'controlled evidence failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER fail_delivery_evidence_test BEFORE INSERT ON app.outbox_events FOR EACH ROW EXECUTE FUNCTION app.fail_delivery_evidence_test()`);
+  let sends = 0;
+  const dispatcher = new MetaDispatcher(worker, {
+    send: async () => { sends++; return { kind: "accepted", id: "wamid.accepted-rollback" }; },
+  }, cipher, f.config, new RuntimeSafety(worker, f.config.budget));
+  try {
+    await assert.rejects(() => dispatcher.tick(f.tenant), /controlled evidence failure/);
+    const message = (await admin.query("SELECT * FROM app.messages WHERE outbox_id=$1", [f.outbox.id])).rows[0];
+    assert.equal(message.delivery_status, "pending");
+    assert.equal(message.provider_message_id, null);
+    assert.equal((await admin.query("SELECT status FROM app.outbox_events WHERE id=$1", [f.outbox.id])).rows[0].status, "sending");
+    assert.equal((await admin.query("SELECT count(*)::int n FROM app.audit_logs WHERE business_id=$1 AND action='message.delivery_status'", [f.tenant])).rows[0].n, 0);
+  } finally {
+    await admin.query("DROP TRIGGER fail_delivery_evidence_test ON app.outbox_events; DROP FUNCTION app.fail_delivery_evidence_test()");
+  }
+  await admin.query("UPDATE app.outbox_events SET lease_until=now()-interval '1 second' WHERE id=$1", [f.outbox.id]);
+  assert.equal(await dispatcher.tick(f.tenant), false);
+  assert.equal(sends, 1);
+  assert.equal((await admin.query("SELECT delivery_status FROM app.messages WHERE outbox_id=$1", [f.outbox.id])).rows[0].delivery_status, "unknown");
+  assert.equal((await admin.query("SELECT count(*)::int n FROM app.outbox_events WHERE business_id=$1 AND event_type='message.delivery_updated'", [f.tenant])).rows[0].n, 1);
+});
+for (const stale of ["sent", "delivered", "read"] as const)
+  test(`stale Meta ${stale} cannot overwrite a newer failed callback`, async () => {
+    const f = await quoteFixture(), id = "wamid.stale." + randomUUID();
+    await new MetaDispatcher(worker, { send: async () => ({ kind: "accepted", id }) }, cipher, f.config, new RuntimeSafety(worker, f.config.budget)).tick(f.tenant);
+    const at = Date.now();
+    const callback = (status: string, timestamp: number) => scoped(worker, f.tenant, r => reconcileStatus(r, {
+      id: randomUUID(), channel_id: f.channel, payload: {
+        provider_message_id: id, provider_timestamp: new Date(timestamp).toISOString(), content: { status, callback: f.outbox.id },
+      },
+    }));
+    await callback("failed", at);
+    const before = (await admin.query("SELECT * FROM app.messages WHERE outbox_id=$1", [f.outbox.id])).rows[0];
+    const transport = (await admin.query("SELECT * FROM app.outbox_events WHERE id=$1", [f.outbox.id])).rows[0];
+    await callback(stale, at - 1000);
+    assert.equal(before.delivery_status, "failed");
+    assert.deepEqual((await admin.query("SELECT * FROM app.messages WHERE outbox_id=$1", [f.outbox.id])).rows[0], before);
+    assert.deepEqual((await admin.query("SELECT * FROM app.outbox_events WHERE id=$1", [f.outbox.id])).rows[0], transport);
+    assert.equal((await admin.query("SELECT count(*)::int n FROM app.outbox_events WHERE business_id=$1 AND event_type='message.delivery_updated'", [f.tenant])).rows[0].n, 2);
+    assert.equal((await admin.query("SELECT count(*)::int n FROM app.audit_logs WHERE business_id=$1 AND action='message.delivery_status'", [f.tenant])).rows[0].n, 2);
+  });
+test("duplicate failed callback advances only the watermark and blocks intervening stale success", async () => {
+  const f = await quoteFixture(), id = "wamid.watermark." + randomUUID();
+  await new MetaDispatcher(worker, { send: async () => ({ kind: "accepted", id }) }, cipher, f.config, new RuntimeSafety(worker, f.config.budget)).tick(f.tenant);
+  const at = Date.now();
+  const callback = (status: string, timestamp: number) => scoped(worker, f.tenant, r => reconcileStatus(r, {
+    id: randomUUID(), channel_id: f.channel, payload: {
+      provider_message_id: id, provider_timestamp: new Date(timestamp).toISOString(), content: { status, callback: f.outbox.id },
+    },
+  }));
+  await callback("failed", at);
+  const before = (await admin.query("SELECT * FROM app.messages WHERE outbox_id=$1", [f.outbox.id])).rows[0];
+  await callback("failed", at + 2000);
+  await callback("delivered", at + 1000);
+  assert.deepEqual((await admin.query("SELECT * FROM app.messages WHERE outbox_id=$1", [f.outbox.id])).rows[0], before);
+  assert.equal((await admin.query("SELECT provider_status_at FROM app.outbox_events WHERE id=$1", [f.outbox.id])).rows[0].provider_status_at.getTime(), at + 2000);
+  assert.equal((await admin.query("SELECT count(*)::int n FROM app.outbox_events WHERE business_id=$1 AND event_type='message.delivery_updated'", [f.tenant])).rows[0].n, 2);
 });
 for (const status of ["sent", "delivered", "read", "failed"] as const)
   test(`Meta ${status} callback emits a versioned domain event once through inbox processing`, async () => {
