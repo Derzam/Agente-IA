@@ -6,6 +6,10 @@ import {
   sanitizeFailureCode,
 } from '../adapters/conversationAdapter';
 import { shouldRunPolling } from '../hooks/usePolling';
+import {
+  reconcileConversationMessages,
+  sortMessagesChronological,
+} from '../features/conversations/messageReconciliation';
 import type { Message as DTOMessage } from '@agente-ia/shared';
 import type { ChatMessage, DeliveryStatus } from '../types/viewModels';
 import { RUNTIME_PRESENTATION, RUNTIME_READINESS_PUBLIC } from '../components/operations/runtimePresentation';
@@ -36,6 +40,7 @@ describe('Phase 5 Operations & Runtime UI Suite', () => {
         direction: 'outbound',
         kind: 'text',
         actor_type: 'human',
+        outbox_id: 'outbox-receipt-001',
         text: 'Hola, tu pedido está en preparación.',
         delivery_status: null,
         outbox_status: 'queued',
@@ -58,6 +63,7 @@ describe('Phase 5 Operations & Runtime UI Suite', () => {
         direction: 'outbound',
         kind: 'text',
         actor_type: 'human',
+        outbox_id: null,
         text: 'Mensaje de prueba',
         delivery_status: 'sent',
       };
@@ -78,6 +84,7 @@ describe('Phase 5 Operations & Runtime UI Suite', () => {
         direction: 'outbound',
         kind: 'text',
         actor_type: 'human',
+        outbox_id: null,
         text: 'Mensaje sin confirmación definitiva',
         delivery_status: 'unknown',
       };
@@ -99,6 +106,7 @@ describe('Phase 5 Operations & Runtime UI Suite', () => {
         direction: 'outbound',
         kind: 'text',
         actor_type: 'human',
+        outbox_id: null,
         text: 'Enviando...',
         delivery_status: null,
         outbox_status: 'sending',
@@ -193,6 +201,26 @@ describe('Phase 5 Operations & Runtime UI Suite', () => {
 
       expect(mapDtoMessageToViewModel(safeDto).failureCode).toBe('131026');
       expect(mapDtoMessageToViewModel(unsafeDto).failureCode).toBeNull();
+    });
+
+    it('mapDtoMessageToViewModel maps typed outbox_id without requiring any bypass', () => {
+      const typedDto: DTOMessage = {
+        id: 'msg-outbox-1',
+        business_id: 'biz-001',
+        conversation_id: 'conv-001',
+        version: 1,
+        created_at: '2026-10-04T10:00:00Z',
+        updated_at: '2026-10-04T10:00:00Z',
+        direction: 'outbound',
+        kind: 'text',
+        actor_type: 'human',
+        outbox_id: 'outbox-uuid-canonical-1',
+        text: 'Mensaje con outbox id',
+        delivery_status: 'sent',
+      };
+
+      const vm = mapDtoMessageToViewModel(typedDto);
+      expect(vm.outboxId).toBe('outbox-uuid-canonical-1');
     });
   });
 
@@ -361,8 +389,125 @@ describe('Phase 5 Operations & Runtime UI Suite', () => {
       expect(shouldRunPolling(true, false, true, true)).toBe(false);
     });
 
-    it('deduplicates polled messages and retains unconfirmed optimistic queued messages', () => {
-      const prevMessages: ChatMessage[] = [
+    it('normalizes descending API messages into chronological ascending order (antiguo, medio, nuevo)', () => {
+      const apiDescMessages: ChatMessage[] = [
+        {
+          id: 'msg-3',
+          conversationId: 'conv-1',
+          sender: 'customer',
+          type: 'text',
+          content: 'nuevo',
+          timestamp: '2026-10-04T10:02:00Z',
+          deliveryStatus: 'delivered',
+        },
+        {
+          id: 'msg-2',
+          conversationId: 'conv-1',
+          sender: 'staff',
+          type: 'text',
+          content: 'medio',
+          timestamp: '2026-10-04T10:01:00Z',
+          deliveryStatus: 'sent',
+        },
+        {
+          id: 'msg-1',
+          conversationId: 'conv-1',
+          sender: 'customer',
+          type: 'text',
+          content: 'antiguo',
+          timestamp: '2026-10-04T10:00:00Z',
+          deliveryStatus: 'read',
+        },
+      ];
+
+      const sorted = sortMessagesChronological(apiDescMessages);
+
+      expect(sorted.map((m) => m.content)).toEqual(['antiguo', 'medio', 'nuevo']);
+      // Does not mutate the source array
+      expect(apiDescMessages[0].content).toBe('nuevo');
+      expect(apiDescMessages[2].content).toBe('antiguo');
+    });
+
+    it('provides stable deterministic sorting when timestamps are identical using id as tie-breaker', () => {
+      const sameTimestampMessages: ChatMessage[] = [
+        {
+          id: 'msg-c',
+          conversationId: 'conv-1',
+          sender: 'customer',
+          type: 'text',
+          content: 'C',
+          timestamp: '2026-10-04T10:00:00Z',
+          deliveryStatus: 'delivered',
+        },
+        {
+          id: 'msg-a',
+          conversationId: 'conv-1',
+          sender: 'customer',
+          type: 'text',
+          content: 'A',
+          timestamp: '2026-10-04T10:00:00Z',
+          deliveryStatus: 'delivered',
+        },
+        {
+          id: 'msg-b',
+          conversationId: 'conv-1',
+          sender: 'customer',
+          type: 'text',
+          content: 'B',
+          timestamp: '2026-10-04T10:00:00Z',
+          deliveryStatus: 'delivered',
+        },
+      ];
+
+      const sorted = sortMessagesChronological(sameTimestampMessages);
+      expect(sorted.map((m) => m.id)).toEqual(['msg-a', 'msg-b', 'msg-c']);
+    });
+
+    it('places a newly arrived message at the end of the transcript in chronological order', () => {
+      const previousMessages: ChatMessage[] = [
+        {
+          id: 'msg-1',
+          conversationId: 'conv-1',
+          sender: 'customer',
+          type: 'text',
+          content: 'Mensaje previo',
+          timestamp: '2026-10-04T10:00:00Z',
+          deliveryStatus: 'delivered',
+        },
+      ];
+
+      // Polling returns descending page: [newMsg, previousMsg]
+      const incomingDescFromApi: ChatMessage[] = [
+        {
+          id: 'msg-2',
+          conversationId: 'conv-1',
+          sender: 'staff',
+          type: 'text',
+          content: 'Mensaje nuevo',
+          timestamp: '2026-10-04T10:05:00Z',
+          deliveryStatus: 'sent',
+        },
+        {
+          id: 'msg-1',
+          conversationId: 'conv-1',
+          sender: 'customer',
+          type: 'text',
+          content: 'Mensaje previo',
+          timestamp: '2026-10-04T10:00:00Z',
+          deliveryStatus: 'delivered',
+        },
+      ];
+
+      const reconciled = reconcileConversationMessages(previousMessages, incomingDescFromApi, 'conv-1');
+
+      expect(reconciled).toHaveLength(2);
+      expect(reconciled[0].id).toBe('msg-1');
+      expect(reconciled[1].id).toBe('msg-2');
+      expect(reconciled[1].content).toBe('Mensaje nuevo'); // new message ends at the end
+    });
+
+    it('retains an optimistic queued message at the end of transcript while unconfirmed', () => {
+      const previousMessages: ChatMessage[] = [
         {
           id: 'msg-persisted-1',
           conversationId: 'conv-1',
@@ -370,21 +515,22 @@ describe('Phase 5 Operations & Runtime UI Suite', () => {
           type: 'text',
           content: 'Hola',
           timestamp: '2026-10-04T10:00:00Z',
-          deliveryStatus: 'delivered',
+          deliveryStatus: 'read',
         },
         {
-          id: 'outbox-uuid-queued',
+          id: 'outbox-uuid-queued-1',
+          outboxId: 'outbox-uuid-queued-1',
           conversationId: 'conv-1',
           sender: 'staff',
           type: 'text',
           content: 'En breve te atendemos',
           timestamp: '2026-10-04T10:01:00Z',
-          deliveryStatus: 'queued', // optimistic receipt from 202
+          deliveryStatus: 'queued', // optimistic 202
         },
       ];
 
-      // Polled response from backend includes msg-persisted-1 with updated read status
-      const polledMessages: ChatMessage[] = [
+      // Polling returns only the persisted message (worker hasn't dispatched yet)
+      const incomingFromApi: ChatMessage[] = [
         {
           id: 'msg-persisted-1',
           conversationId: 'conv-1',
@@ -396,23 +542,130 @@ describe('Phase 5 Operations & Runtime UI Suite', () => {
         },
       ];
 
-      // Reconciler logic as implemented in ConversationsView
-      const incomingMap = new Map(polledMessages.map((m) => [m.id, m]));
-      const merged: ChatMessage[] = [];
-      for (const m of polledMessages) {
-        merged.push(m);
-      }
-      for (const p of prevMessages) {
-        if (!incomingMap.has(p.id) && p.deliveryStatus === 'queued') {
-          merged.push(p);
-        }
-      }
+      const reconciled = reconcileConversationMessages(previousMessages, incomingFromApi, 'conv-1');
 
-      expect(merged).toHaveLength(2);
-      expect(merged[0].id).toBe('msg-persisted-1');
-      expect(merged[0].deliveryStatus).toBe('read'); // updated without duplicating
-      expect(merged[1].id).toBe('outbox-uuid-queued'); // queued preserved until confirmed
-      expect(merged[1].deliveryStatus).toBe('queued');
+      expect(reconciled).toHaveLength(2);
+      expect(reconciled[0].id).toBe('msg-persisted-1');
+      expect(reconciled[1].id).toBe('outbox-uuid-queued-1');
+      expect(reconciled[1].deliveryStatus).toBe('queued'); // retained at the end of transcript
+    });
+
+    it('removes optimistic queued message when persisted message with matching outboxId appears without duplicate', () => {
+      const previousWithOptimistic: ChatMessage[] = [
+        {
+          id: 'msg-persisted-1',
+          conversationId: 'conv-1',
+          sender: 'customer',
+          type: 'text',
+          content: 'Hola',
+          timestamp: '2026-10-04T10:00:00Z',
+          deliveryStatus: 'read',
+        },
+        {
+          id: 'outbox-uuid-777',
+          outboxId: 'outbox-uuid-777',
+          conversationId: 'conv-1',
+          sender: 'staff',
+          type: 'text',
+          content: 'Pedido en camino',
+          timestamp: '2026-10-04T10:02:00Z',
+          deliveryStatus: 'queued', // optimistic receipt
+        },
+      ];
+
+      // Worker persisted message msg-persisted-2 with outbox_id: outbox-uuid-777
+      // API returns descending: [msg-persisted-2, msg-persisted-1]
+      const incomingPolled: ChatMessage[] = [
+        {
+          id: 'msg-persisted-2',
+          outboxId: 'outbox-uuid-777',
+          conversationId: 'conv-1',
+          sender: 'staff',
+          type: 'text',
+          content: 'Pedido en camino',
+          timestamp: '2026-10-04T10:02:00Z',
+          deliveryStatus: 'sent',
+        },
+        {
+          id: 'msg-persisted-1',
+          conversationId: 'conv-1',
+          sender: 'customer',
+          type: 'text',
+          content: 'Hola',
+          timestamp: '2026-10-04T10:00:00Z',
+          deliveryStatus: 'read',
+        },
+      ];
+
+      const reconciled = reconcileConversationMessages(previousWithOptimistic, incomingPolled, 'conv-1');
+
+      // Exactly 2 messages, no duplicate
+      expect(reconciled).toHaveLength(2);
+      expect(reconciled[0].id).toBe('msg-persisted-1');
+      expect(reconciled[1].id).toBe('msg-persisted-2');
+      expect(reconciled[1].outboxId).toBe('outbox-uuid-777');
+      expect(reconciled[1].deliveryStatus).toBe('sent'); // confirmed status from backend
+      // The optimistic outbox-uuid-777 is not duplicated
+      expect(reconciled.filter((m) => m.outboxId === 'outbox-uuid-777')).toHaveLength(1);
+    });
+
+    it('strictly isolates messages by conversationId, excluding messages from other conversations', () => {
+      const incomingMixed: ChatMessage[] = [
+        {
+          id: 'msg-conv1-1',
+          conversationId: 'conv-1',
+          sender: 'customer',
+          type: 'text',
+          content: 'Mensaje de conv 1',
+          timestamp: '2026-10-04T10:00:00Z',
+          deliveryStatus: 'read',
+        },
+        {
+          id: 'msg-conv2-1',
+          conversationId: 'conv-2',
+          sender: 'customer',
+          type: 'text',
+          content: 'Mensaje de OTRA conversacion',
+          timestamp: '2026-10-04T10:01:00Z',
+          deliveryStatus: 'read',
+        },
+      ];
+
+      const previousMixed: ChatMessage[] = [
+        {
+          id: 'outbox-conv2-queued',
+          outboxId: 'outbox-conv2-queued',
+          conversationId: 'conv-2',
+          sender: 'staff',
+          type: 'text',
+          content: 'Optimista de OTRA conv',
+          timestamp: '2026-10-04T10:02:00Z',
+          deliveryStatus: 'queued',
+        },
+      ];
+
+      const reconciled = reconcileConversationMessages(previousMixed, incomingMixed, 'conv-1');
+
+      expect(reconciled).toHaveLength(1);
+      expect(reconciled[0].id).toBe('msg-conv1-1');
+      expect(reconciled[0].conversationId).toBe('conv-1');
+      // Neither incoming nor previous from conv-2 are present
+      expect(reconciled.some((m) => m.conversationId === 'conv-2')).toBe(false);
+    });
+
+    it('determines scroll proximity safely without jumping if scrolled up', () => {
+      const isNearBottom = (scrollHeight: number, scrollTop: number, clientHeight: number) => {
+        const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+        return distanceToBottom < 80;
+      };
+
+      // Near bottom: within 80px -> should preserve scroll to bottom
+      expect(isNearBottom(1000, 750, 200)).toBe(true); // distance = 50 < 80
+      expect(isNearBottom(1000, 800, 200)).toBe(true); // distance = 0 < 80
+
+      // Scrolled up: operator is reading history -> should NOT auto-scroll
+      expect(isNearBottom(1000, 300, 200)).toBe(false); // distance = 500 >= 80
+      expect(isNearBottom(1000, 700, 200)).toBe(false); // distance = 100 >= 80
     });
   });
 

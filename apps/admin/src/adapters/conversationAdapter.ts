@@ -97,7 +97,7 @@ export function mapDtoMessageToViewModel(
     content: dto.text || (dto.kind === 'location' ? '📍 Ubicación compartida' : ''),
     timestamp: dto.created_at,
     isInternalNote: false,
-    outboxId: (dto as any).outbox_id ?? null,
+    outboxId: dto.outbox_id ?? null,
     deliveryStatus,
     failureCode,
   };

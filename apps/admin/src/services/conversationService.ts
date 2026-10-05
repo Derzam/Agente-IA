@@ -8,6 +8,7 @@ import {
   mapDtoMessageToViewModel,
 } from '@/adapters/conversationAdapter';
 import type { RequestOptions } from '@/api/types';
+import { sortMessagesChronological } from '@/features/conversations/messageReconciliation';
 
 let localConversations: ConversationSummary[] = [...mockConversations];
 let localMessages: Record<string, ChatMessage[]> = { ...mockMessagesByConversation };
@@ -56,11 +57,11 @@ export const conversationService = {
 
   async getMessages(conversationId: string, options?: RequestOptions): Promise<ChatMessage[]> {
     if (USE_MOCK_DATA) {
-      return Promise.resolve([...(localMessages[conversationId] || [])]);
+      return Promise.resolve(sortMessagesChronological([...(localMessages[conversationId] || [])]));
     }
 
     const dtoList = await endpoints.getMessages(conversationId, undefined, undefined, options);
-    return dtoList.map(mapDtoMessageToViewModel);
+    return sortMessagesChronological(dtoList.map(mapDtoMessageToViewModel));
   },
 
   async sendMessage(
