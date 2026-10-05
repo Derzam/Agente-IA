@@ -1,3 +1,4 @@
+import { RUNTIME_PRESENTATION } from '@/components/operations/runtimePresentation';
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Clock,
@@ -382,11 +383,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <div className="space-y-1.5 text-xs text-slate-300">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-1">
                   <span className="text-slate-400">WhatsApp Sandbox:</span>
-                  <span className="font-mono text-slate-300">No verificado por endpoint público</span>
+                  <span className="font-mono text-slate-300">{RUNTIME_PRESENTATION.meta.status}</span>
                 </div>
                 <div className="flex items-center justify-between border-b border-slate-800 pb-1">
                   <span className="text-slate-400">OpenAI Responses:</span>
-                  <span className="font-mono text-slate-300">Sin estado público de runtime</span>
+                  <span className="font-mono text-slate-300">{RUNTIME_PRESENTATION.openai.status}</span>
                 </div>
                 <div className="flex items-center justify-between border-b border-slate-800 pb-1">
                   <span className="text-slate-400">Atención en espera:</span>
@@ -396,7 +397,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </div>
                 <div className="flex items-center justify-between pt-0.5">
                   <span className="text-slate-400">Hosting:</span>
-                  <span className="text-amber-300 text-[11px]">No desplegado</span>
+                  <span className="text-amber-300 text-[11px]">{RUNTIME_PRESENTATION.hosting.status}</span>
                 </div>
               </div>
               <p className="text-[11px] text-slate-400 leading-relaxed pt-1">
