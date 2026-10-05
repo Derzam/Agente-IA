@@ -76,16 +76,18 @@ export const conversationService = {
     const key = idempotencyKey || newIdempotencyKey();
 
     if (USE_MOCK_DATA) {
+      const now = Date.now();
       const newMsg: ChatMessage = {
-        id: `msg-${Date.now()}`,
+        id: `msg-${now}`,
         conversationId,
         sender: 'staff',
         senderName: isInternalNote ? 'Nota de Staff' : 'Operador en Turno',
         type: isInternalNote ? 'internal_note' : 'text',
         content: text,
-        timestamp: new Date().toISOString(),
+        timestamp: new Date(now).toISOString(),
         isInternalNote,
         anchorMessageId: anchorMessageId ?? null,
+        createdAtMs: now,
       };
 
       if (!localMessages[conversationId]) {
@@ -121,18 +123,20 @@ export const conversationService = {
       options
     );
 
+    const now = Date.now();
     // Return message receipt with status 'queued' (202 Accepted)
     return {
-      id: receipt?.outbox_id || `msg-${Date.now()}`,
+      id: receipt?.outbox_id || `msg-${now}`,
       conversationId,
       sender: 'staff',
       senderName: 'Operador',
       type: 'text',
       content: text,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date(now).toISOString(),
       isInternalNote: false,
       outboxId: receipt?.outbox_id || null,
       anchorMessageId: anchorMessageId ?? null,
+      createdAtMs: now,
       deliveryStatus: receipt?.status || 'queued',
     };
   },

@@ -25,6 +25,8 @@ export const QUEUED_RECEIPT_TTL_MS = 5 * 60 * 1000; // 5 minutes
  * - Queued receipts are placed at the end of the transcript.
  * - Once the persisted message exposing the same outbox_id arrives,
  *   the optimistic queued receipt is removed without duplicate.
+ * - Request-generation ordering: in-flight polls dispatched before the receipt was created
+ *   cannot contain its persisted counterpart and must never evict the receipt.
  * - If a tab was inactive or more than a full page of newer messages arrived,
  *   queued receipts older than the TTL or falling outside the bounded page window (>= 20 messages) are expired.
  */
@@ -32,7 +34,8 @@ export function reconcileConversationMessages(
   previous: ChatMessage[],
   incoming: ChatMessage[],
   conversationId: string,
-  nowMs = Date.now()
+  nowMs = Date.now(),
+  pollInitiatedAtMs = nowMs
 ): ChatMessage[] {
   const scopedIncoming = incoming.filter((message) => message.conversationId === conversationId);
   const sortedIncoming = sortMessagesChronological(scopedIncoming);
@@ -57,10 +60,19 @@ export function reconcileConversationMessages(
       return false;
     }
 
-    const msgTime = Number.isNaN(Date.parse(message.timestamp)) ? 0 : Date.parse(message.timestamp);
+    const receiptCreatedTime =
+      message.createdAtMs ??
+      (Number.isNaN(Date.parse(message.timestamp)) ? 0 : Date.parse(message.timestamp));
+
+    // Request-generation ordering:
+    // If the poll was initiated before this receipt was created, the poll's response
+    // cannot contain its persisted counterpart. Never evict a receipt based on an older in-flight poll.
+    if (pollInitiatedAtMs < receiptCreatedTime) {
+      return true;
+    }
 
     // 1. Expire receipts that exceed the TTL on the client clock (e.g., after long inactive tab)
-    if (msgTime > 0 && nowMs - msgTime > QUEUED_RECEIPT_TTL_MS) {
+    if (receiptCreatedTime > 0 && nowMs - receiptCreatedTime > QUEUED_RECEIPT_TTL_MS) {
       return false;
     }
 

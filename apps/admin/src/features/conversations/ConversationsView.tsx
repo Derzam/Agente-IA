@@ -96,10 +96,11 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
   const loadMessages = useCallback(async (convId: string, signal?: AbortSignal, latestConversation?: ConversationSummary) => {
     if (!convId) return;
     try {
+      const pollInitiatedAt = Date.now();
       const msgs = await conversationService.getMessages(convId, { signal });
       if (signal?.aborted || selectedConvIdRef.current !== convId) return;
       setMessages((prev) => {
-        const merged = reconcileConversationMessages(prev, msgs, convId);
+        const merged = reconcileConversationMessages(prev, msgs, convId, Date.now(), pollInitiatedAt);
         if (
           prev.length === merged.length &&
           prev.every(

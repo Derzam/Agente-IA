@@ -794,6 +794,67 @@ describe('Phase 5 Operations & Runtime UI Suite', () => {
       expect(reconciled.some((m) => m.id === 'outbox-receipt-active')).toBe(true);
     });
 
+    it('preserves queued receipts when an older in-flight poll completes whose saturated page displaced the anchor, thanks to request-generation ordering', () => {
+      const pollInitiatedAtMs = 1000;
+      const receiptCreatedAtMs = 1500;
+      const pollCompletedAtMs = 2000;
+
+      const previousWithReceipt: ChatMessage[] = [
+        {
+          id: 'outbox-receipt-concurrent',
+          outboxId: 'outbox-receipt-concurrent',
+          anchorMessageId: 'msg-anchor-old',
+          createdAtMs: receiptCreatedAtMs,
+          conversationId: 'conv-1',
+          sender: 'staff',
+          type: 'text',
+          content: 'Mensaje enviado mientras el poll ya estaba en vuelo',
+          timestamp: new Date(receiptCreatedAtMs).toISOString(),
+          deliveryStatus: 'queued',
+        },
+      ];
+
+      // Stale in-flight poll returns 20 messages that displaced msg-anchor-old
+      const incomingFromStalePoll: ChatMessage[] = Array.from({ length: 20 }, (_, i) => ({
+        id: `msg-displacing-${i + 1}`,
+        conversationId: 'conv-1',
+        sender: 'customer' as const,
+        type: 'text' as const,
+        content: `Mensaje desplazador ${i + 1}`,
+        timestamp: new Date(Date.parse('2026-10-04T10:00:00Z') + i * 1000).toISOString(),
+        deliveryStatus: 'read' as const,
+      }));
+
+      // Reconcile response from the in-flight poll dispatched BEFORE send
+      const reconciledStale = reconcileConversationMessages(
+        previousWithReceipt,
+        incomingFromStalePoll,
+        'conv-1',
+        pollCompletedAtMs,
+        pollInitiatedAtMs
+      );
+
+      // Receipt MUST be preserved because the poll was dispatched before the send!
+      expect(reconciledStale).toHaveLength(21);
+      expect(reconciledStale.some((m) => m.id === 'outbox-receipt-concurrent')).toBe(true);
+
+      // Now simulate a subsequent poll dispatched AFTER the send (pollInitiatedAtMs = 2500)
+      const postSendPollInitiatedAtMs = 2500;
+      const postSendPollCompletedAtMs = 3000;
+
+      const reconciledPostSend = reconcileConversationMessages(
+        reconciledStale,
+        incomingFromStalePoll,
+        'conv-1',
+        postSendPollCompletedAtMs,
+        postSendPollInitiatedAtMs
+      );
+
+      // Now that the poll was dispatched AFTER the send, missing anchor correctly evicts the displaced receipt
+      expect(reconciledPostSend).toHaveLength(20);
+      expect(reconciledPostSend.some((m) => m.id === 'outbox-receipt-concurrent')).toBe(false);
+    });
+
     it('preserves scroll position without snapping to bottom when operator scrolled up during send', () => {
       // Simulate container state when operator scrolled up while POST was in flight
       const containerElement = {
