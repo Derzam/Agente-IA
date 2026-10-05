@@ -45,6 +45,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
   const { user } = useSession();
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [selectedConvId, setSelectedConvId] = useState<string>('');
+  const selectedConvIdRef = useRef('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isInternalNote, setIsInternalNote] = useState(false);
@@ -77,21 +78,25 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
   const loadConversations = useCallback(async (signal?: AbortSignal) => {
     try {
       const data = await conversationService.getConversations(undefined, { signal });
+      if (signal?.aborted) return;
       setConversations(data);
       setActionError(null);
+      return data;
     } catch (err: any) {
       if (err.name !== 'AbortError') {
         setActionError(err);
       }
+      if (signal) throw err;
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  const loadMessages = useCallback(async (convId: string, signal?: AbortSignal) => {
+  const loadMessages = useCallback(async (convId: string, signal?: AbortSignal, latestConversation?: ConversationSummary) => {
     if (!convId) return;
     try {
       const msgs = await conversationService.getMessages(convId, { signal });
+      if (signal?.aborted || selectedConvIdRef.current !== convId) return;
       setMessages((prev) => {
         // Reconcile and deduplicate by message ID
         const incomingMap = new Map(msgs.map((m) => [m.id, m]));
@@ -120,10 +125,10 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
         return merged;
       });
 
-      const conv = conversations.find((c) => c.id === convId);
+      const conv = latestConversation ?? conversations.find((c) => c.id === convId);
       if (conv?.activeOrderId) {
         const ord = await orderService.getOrderById(conv.activeOrderId, { signal });
-        setActiveOrder(ord || null);
+        if (!signal?.aborted && selectedConvIdRef.current === convId) setActiveOrder(ord || null);
       } else {
         setActiveOrder(null);
       }
@@ -131,29 +136,29 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
       if (err.name !== 'AbortError') {
         setActionError(err);
       }
+      if (signal) throw err;
     }
   }, [conversations]);
 
   useEffect(() => {
-    setIsLoading(true);
-    conversationService.getConversations().then((data) => {
-      setConversations(data);
-      const targetId = initialConversationId || (data.length > 0 ? data[0].id : '');
-      if (targetId) {
-        setSelectedConvId(targetId);
-        isNearBottomRef.current = true;
-        conversationService.getMessages(targetId).then(setMessages);
-      }
-      setIsLoading(false);
-    });
+    if (initialConversationId) {
+      selectedConvIdRef.current = initialConversationId;
+      setSelectedConvId(initialConversationId);
+    }
   }, [initialConversationId]);
 
-  // Polling for conversation list and active chat
+  // Load once on mount, then poll; errors reach the shared backoff scheduler.
   usePolling({
     callback: async (signal) => {
-      await loadConversations(signal);
-      if (selectedConvId) {
-        await loadMessages(selectedConvId, signal);
+      const data = await loadConversations(signal);
+      if (signal.aborted || !data) return;
+      const targetId = selectedConvId || initialConversationId || data[0]?.id;
+      if (targetId) {
+        if (!selectedConvId) {
+          selectedConvIdRef.current = targetId;
+          setSelectedConvId(targetId);
+        }
+        await loadMessages(targetId, signal, data.find((c) => c.id === targetId));
       }
     },
     intervalMs: 8000,
@@ -168,6 +173,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
   }, [messages]);
 
   const handleSelectConversation = (convId: string) => {
+    selectedConvIdRef.current = convId;
     setSelectedConvId(convId);
     isNearBottomRef.current = true;
     loadMessages(convId);
@@ -464,6 +470,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
               error={actionError}
               onRetry={() => {
                 setActionError(null);
+                loadConversations();
                 if (selectedConvId) loadMessages(selectedConvId);
               }}
             />

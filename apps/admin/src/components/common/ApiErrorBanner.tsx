@@ -10,8 +10,6 @@ interface ApiErrorBannerProps {
 }
 
 export const ApiErrorBanner: React.FC<ApiErrorBannerProps> = ({ error, onRetry, className = '' }) => {
-  if (!error) return null;
-
   let title = 'Ocurrió un error';
   let message = 'No se pudo completar la solicitud.';
   let requestId: string | undefined;
@@ -50,12 +48,7 @@ export const ApiErrorBanner: React.FC<ApiErrorBannerProps> = ({ error, onRetry, 
       message = error.message;
       icon = <Gauge className="w-5 h-5 text-orange-600 shrink-0" aria-hidden="true" />;
       bannerColor = 'bg-orange-50 border-orange-200 text-orange-950';
-    } else if (error.status === 503 || error.code === 'PROVIDER_UNAVAILABLE') {
-      title = 'Proveedor temporalmente no disponible';
-      message = error.message || 'El servicio o sus dependencias están temporalmente fuera de línea. Tu sesión sigue activa.';
-      icon = <ServerCrash className="w-5 h-5 text-amber-600 shrink-0" aria-hidden="true" />;
-      bannerColor = 'bg-amber-50 border-amber-300 text-amber-950';
-    } else if (error.code === 'CIRCUIT_OPEN' as any) {
+    } else if ((error.code as string) === 'CIRCUIT_OPEN') {
       title = 'Servicio de IA temporalmente suspendido';
       message = error.message || 'El circuito de protección del proveedor está abierto. No se realizarán reintentos continuos.';
       icon = <ZapOff className="w-5 h-5 text-purple-600 shrink-0" aria-hidden="true" />;
@@ -70,6 +63,11 @@ export const ApiErrorBanner: React.FC<ApiErrorBannerProps> = ({ error, onRetry, 
       message = error.message || 'Han transcurrido más de 24 horas desde el último mensaje del cliente. La política de WhatsApp restringe el envío libre de mensajes.';
       icon = <Clock className="w-5 h-5 text-amber-600 shrink-0" aria-hidden="true" />;
       bannerColor = 'bg-amber-50 border-amber-300 text-amber-950';
+    } else if (error.status === 503 || error.code === 'PROVIDER_UNAVAILABLE') {
+      title = 'Proveedor temporalmente no disponible';
+      message = error.message || 'El servicio o sus dependencias están temporalmente fuera de línea. Tu sesión sigue activa.';
+      icon = <ServerCrash className="w-5 h-5 text-amber-600 shrink-0" aria-hidden="true" />;
+      bannerColor = 'bg-amber-50 border-amber-300 text-amber-950';
     } else {
       message = error.message;
     }
@@ -77,20 +75,22 @@ export const ApiErrorBanner: React.FC<ApiErrorBannerProps> = ({ error, onRetry, 
     message = error.message;
   }
 
-  // Rate limit countdown to prevent retry loops
-  const [countdown, setCountdown] = useState<number>(retryAfterSec || 0);
-
+  // Every new error establishes its own deadline, even with the same delay.
+  const [countdown, setCountdown] = useState<number>(retryAfterSec ?? 0);
   useEffect(() => {
-    setCountdown(retryAfterSec || 0);
-  }, [retryAfterSec]);
-
-  useEffect(() => {
-    if (countdown <= 0) return;
+    const deadline = Date.now() + (retryAfterSec ?? 0) * 1000;
+    const update = () => setCountdown(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
+    update();
+    if (!retryAfterSec) return;
     const interval = setInterval(() => {
-      setCountdown((prev) => Math.max(0, prev - 1));
+      update();
+      if (Date.now() >= deadline) clearInterval(interval);
     }, 1000);
     return () => clearInterval(interval);
-  }, [countdown]);
+  }, [error, retryAfterSec]);
+
+  // Hooks run in the same order across null -> error -> null transitions.
+  if (!error) return null;
 
   return (
     <div
@@ -121,7 +121,7 @@ export const ApiErrorBanner: React.FC<ApiErrorBannerProps> = ({ error, onRetry, 
           )}
         </div>
       </div>
-      {onRetry && (
+      {onRetry && !['AI_BUDGET_EXCEEDED', 'BUDGET_EXCEEDED', 'CIRCUIT_OPEN', 'WINDOW_CLOSED'].includes(code ?? '') && (
         <Button
           variant="outline"
           size="sm"

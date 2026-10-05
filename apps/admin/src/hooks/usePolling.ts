@@ -1,12 +1,7 @@
-import { useEffect, useRef, useCallback } from 'react';
-import { NormalizedApiError, NetworkError } from '@/api/types';
+import { useEffect, useRef } from 'react';
+import { createPollingController } from './pollingController';
 
-export function shouldRunPolling(
-  enabled: boolean,
-  hidden: boolean,
-  focused: boolean,
-  executing: boolean
-): boolean {
+export function shouldRunPolling(enabled: boolean, hidden: boolean, focused: boolean, executing: boolean): boolean {
   return enabled && !hidden && focused && !executing;
 }
 
@@ -17,120 +12,34 @@ interface UsePollingOptions {
   onError?: (error: unknown) => void;
 }
 
-export function usePolling({
-  callback,
-  intervalMs = 8000, // 8 seconds, within the 5–10s target
-  enabled = true,
-  onError,
-}: UsePollingOptions) {
-  const isExecutingRef = useRef(false);
-  const activeAbortControllerRef = useRef<AbortController | null>(null);
-  const consecutiveNetworkErrorsRef = useRef(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const backoffDelayRef = useRef<number | null>(null);
-  const isWindowFocusedRef = useRef(
-    typeof document === 'undefined' ? true : document.visibilityState === 'visible'
-  );
-
-  const clearTimer = useCallback(() => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  }, []);
-
-  const executeTick = useCallback(async () => {
-    if (!shouldRunPolling(enabled, document.hidden, isWindowFocusedRef.current, isExecutingRef.current)) {
-      return;
-    }
-
-    isExecutingRef.current = true;
-    activeAbortControllerRef.current = new AbortController();
-
-    try {
-      await callback(activeAbortControllerRef.current.signal);
-      consecutiveNetworkErrorsRef.current = 0;
-      backoffDelayRef.current = null;
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        // Ignored on deliberate cancellation
-        return;
-      }
-
-      onError?.(err);
-
-      // 429 Rate Limit backoff
-      if (err instanceof NormalizedApiError && err.status === 429) {
-        const waitSec = err.retryAfterSeconds || 30;
-        backoffDelayRef.current = waitSec * 1000;
-      } else if (err instanceof NetworkError) {
-        consecutiveNetworkErrorsRef.current += 1;
-        // Pause/backoff after consecutive network errors (e.g. 20s, 40s, max 60s)
-        const multiplier = Math.min(consecutiveNetworkErrorsRef.current, 3);
-        backoffDelayRef.current = intervalMs * multiplier * 2;
-      }
-    } finally {
-      isExecutingRef.current = false;
-      activeAbortControllerRef.current = null;
-
-      // Schedule next run if still enabled
-      if (enabled && !document.hidden && isWindowFocusedRef.current) {
-        const delay = backoffDelayRef.current ?? intervalMs;
-        clearTimer();
-        timerRef.current = setTimeout(executeTick, delay);
-      }
-    }
-  }, [callback, enabled, intervalMs, onError, clearTimer]);
+export function usePolling({ callback, intervalMs = 8000, enabled = true, onError }: UsePollingOptions) {
+  const latest = useRef({ callback, onError });
+  useEffect(() => { latest.current = { callback, onError }; }, [callback, onError]);
 
   useEffect(() => {
-    if (!enabled) {
-      clearTimer();
-      activeAbortControllerRef.current?.abort();
-      return;
-    }
-
-    // Immediate first execution
-    executeTick();
-
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        isWindowFocusedRef.current = false;
-        clearTimer();
-        activeAbortControllerRef.current?.abort();
-      } else if (typeof document.hasFocus !== 'function' || document.hasFocus()) {
-        isWindowFocusedRef.current = true;
-        consecutiveNetworkErrorsRef.current = 0;
-        backoffDelayRef.current = null;
-        clearTimer();
-        executeTick();
-      }
+    if (!enabled) return;
+    let focused = typeof document.hasFocus !== 'function' || document.hasFocus();
+    const poller = createPollingController({
+      callback: (signal) => latest.current.callback(signal),
+      onError: (error) => latest.current.onError?.(error),
+      intervalMs,
+      canRun: () => shouldRunPolling(enabled, document.hidden, focused, false),
+    });
+    const pause = () => { focused = false; poller.pause(); };
+    const resume = () => { focused = true; if (!document.hidden) poller.resume(); };
+    const visibility = () => {
+      if (document.hidden) pause();
+      else if (typeof document.hasFocus !== 'function' || document.hasFocus()) resume();
     };
-
-    const handleWindowBlur = () => {
-      isWindowFocusedRef.current = false;
-      clearTimer();
-      activeAbortControllerRef.current?.abort();
-    };
-
-    const handleWindowFocus = () => {
-      if (document.hidden) return;
-      isWindowFocusedRef.current = true;
-      consecutiveNetworkErrorsRef.current = 0;
-      backoffDelayRef.current = null;
-      clearTimer();
-      executeTick();
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('blur', handleWindowBlur);
-    window.addEventListener('focus', handleWindowFocus);
-
+    document.addEventListener('visibilitychange', visibility);
+    window.addEventListener('blur', pause);
+    window.addEventListener('focus', resume);
+    poller.resume();
     return () => {
-      clearTimer();
-      activeAbortControllerRef.current?.abort();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('blur', handleWindowBlur);
-      window.removeEventListener('focus', handleWindowFocus);
+      poller.dispose();
+      document.removeEventListener('visibilitychange', visibility);
+      window.removeEventListener('blur', pause);
+      window.removeEventListener('focus', resume);
     };
-  }, [enabled, executeTick, clearTimer]);
+  }, [enabled, intervalMs]);
 }

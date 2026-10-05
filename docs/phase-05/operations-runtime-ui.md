@@ -62,17 +62,15 @@ En la pantalla de Configuración (`SettingsView`):
 
 ## 6. Disyuntor Operativo (Circuit Breaker)
 
-Cuando el backend comunica que el circuito de IA está abierto (`circuit_open`):
-- Se despliega el banner `CircuitBreakerNotice`: *"Servicio de IA temporalmente suspendido."*
-- El frontend no ejecuta ráfagas de reintentos automáticos ni bombardea el backend, esperando la restauración por el worker / orquestador.
+PR #16 no publica el circuito en el contrato administrativo. `CircuitBreakerNotice` queda como componente de presentación sin datos reales. El banner genérico y el scheduler admiten defensivamente `CIRCUIT_OPEN` si llega en un error: muestran la suspensión y detienen el polling hasta desmontar/reactivar la vista. Esto no añade el código al enum compartido ni presume un endpoint de restauración.
 
 ---
 
 ## 7. Manejo de Errores 429 y 503
 
 ### HTTP 429 (Rate Limited):
-- Se analiza el encabezado estándar `Retry-After`.
-- El componente `RateLimitNotice` inicia una cuenta regresiva visual en segundos no alarmista.
+- Se analiza `Retry-After` como segundos enteros o fecha HTTP, también para HTTP 503; los valores malformados no se interpretan como segundos.
+- `ApiErrorBanner` muestra la cuenta regresiva contra un plazo absoluto. Cada nuevo error renueva la espera aunque traiga el mismo número de segundos.
 - El botón de reintento manual permanece deshabilitado hasta que expira el período de enfriamiento para prevenir bucles de saturación.
 
 ### HTTP 503 (Provider Unavailable):
@@ -86,7 +84,9 @@ Cuando el backend comunica que el circuito de IA está abierto (`circuit_open`):
 El hook `usePolling` y la vista `ConversationsView` garantizan:
 - **Visibility Guard**: El polling se detiene cuando la pestaña está oculta (`document.visibilityState === 'hidden'`).
 - **Focus Guard**: El polling se suspende si la ventana no tiene el foco del usuario.
-- **Backoff Progresivo**: Incremento cuadrático con jitter en caso de errores de red o disponibilidad.
+- **Backoff Progresivo**: Espera exponencial limitada con jitter para fallos de red, timeout o HTTP 503. Se respeta un `Retry-After` mayor que esa espera.
+- **Plazos persistentes**: Blur/focus, visibilidad y nuevos renderizados no borran el plazo de espera. Solo hay un timer y una solicitud de polling activa. Al desmontar se cancela la solicitud y su finalización tardía no crea otro timer.
+- **Errores propagados**: Los loaders de Dashboard, Pedidos y Conversaciones muestran el error y lo propagan al scheduler. La primera carga también usa ese scheduler, evitando dos cargas simultáneas al montar.
 - **Deduplicación**: Se indexan los mensajes por ID único (`id` / `outbox_id`), preservando mensajes optimistas locales encolados mientras el backend los confirma, evitando parpadeos y duplicación.
 - **Preservación de Scroll**: El contenedor de mensajes detecta si el usuario está leyendo mensajes anteriores (`isNearBottomRef`) y no fuerza el autoscroll hacia abajo ante cada respuesta del polling.
 
@@ -117,8 +117,22 @@ El hook `usePolling` y la vista `ConversationsView` garantizan:
 ## 12. Panel Principal (Dashboard) Operativo y Honesto
 
 - Se erradicó por completo el widget simulado previo (*"Asistente Virtual Max"*, tasa ficticia de *84%*, *"Configurar Tono"*).
-- En su lugar, se integró el bloque **Operación & Runtime (Fase 5 Staging)** que expone métricas y estados verificados exclusivamente por backend:
-  - Estado del canal WhatsApp Sandbox con verificación HMAC y outbox activo.
-  - Orquestador de inferencia OpenAI Responses API.
+- En su lugar, el bloque **Operación & Runtime (Fase 5 Staging)** muestra las limitaciones del contrato público:
+  - Meta: **No verificado por endpoint público**. No afirma HMAC, outbox activo o credenciales configuradas.
+  - OpenAI: **Sin estado público de runtime**. No afirma modelo, disponibilidad, circuito o presupuesto.
   - Conteo de conversaciones en espera humana pendientes (`human_pending`) extraído de la colección autoritativa.
-  - Claridad de infraestructura: *"Sin hosting de producción / Entorno staging"*.
+  - Hosting: **No desplegado**, sin inventar URL pública o health check.
+
+## 13. Regresión de las correcciones
+
+Se añaden pruebas de timers con reloj controlado y pruebas DOM con React/JSdom para comprobar transiciones `null → error → null`, renovación de cooldown, pausa/focus, limpieza al desmontar, callback actualizado sin reinicio, 503, suspensión por presupuesto/circuito y propagación de 429 en las tres vistas reales. Otra prueba comprueba que una respuesta tardía de otro chat no sustituya los mensajes de la conversación seleccionada. JSdom se utiliza exclusivamente como dependencia de desarrollo.
+
+### Validación local de estas correcciones
+
+- `npm ci --no-audit`, typecheck, builds Admin/API, OpenAPI, arquitectura y whitespace: aprobados.
+- Admin: **114 pruebas**, incluidas 25 nuevas pruebas de regresión del scheduler y ciclo de vida de componentes.
+- Backend HTTP, contratos, reglas de dominio y JWKS: **142 pruebas** aprobadas, sin PostgreSQL ni proveedores reales.
+- Combinación local con PR #16 (`c48be1e6aad9ae8cd85d24aee44a11fc8b29f5dd`): tipos, 114 pruebas Admin, ambos builds, OpenAPI, arquitectura y esas 142 pruebas backend aprobados. La combinación requiere regenerar `package-lock.json` conservando las dependencias de ambos PR; no hay conflictos de código.
+- En esa combinación también pasan **25 pruebas de proveedores de Fase 5** con respuestas simuladas, sin llamadas reales a OpenAI/Meta.
+- No se ejecutó la regresión PostgreSQL: no hay servidor local disponible en este entorno. Tampoco se ejecutaron pruebas reales de OpenAI/Meta.
+- `npm audit` fue bloqueado por revisión automática porque transmite metadatos de dependencias a npm. No se afirma una auditoría nueva ni CI verde para este cambio; publicar la rama activaría el CI existente, que incluye esa auditoría. Se requiere autorización explícita para esa transmisión antes de publicar. No se modificó ni redujo el workflow.

@@ -1,5 +1,5 @@
 import { RUNTIME_PRESENTATION } from '@/components/operations/runtimePresentation';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Clock,
   Flame,
@@ -47,6 +47,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         orderService.getOrders(undefined, { signal }),
         conversationService.getConversations(undefined, { signal }),
       ]);
+      if (signal?.aborted) return;
       setMetrics(m);
       setActiveOrders(orders.filter((o: Order) => o.status !== 'delivered' && o.status !== 'cancelled'));
       setWaitingChats(convs.filter((c: ConversationSummary) => c.status === 'human_pending'));
@@ -55,12 +56,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       if (err.name !== 'AbortError') {
         setApiError(err);
       }
+      if (signal) throw err;
     }
   }, []);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
 
   // Polling every 8 seconds while view is active
   usePolling({

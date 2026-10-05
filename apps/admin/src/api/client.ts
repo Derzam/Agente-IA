@@ -8,6 +8,7 @@ import {
   ErrorCode,
   VERSION_CONFLICT_MESSAGE,
 } from './types';
+import { parseRetryAfter } from './retryAfter';
 
 export interface ApiClientConfig {
   baseUrl?: string;
@@ -219,16 +220,9 @@ export class ApiClient {
     }
 
     // 429 Rate Limited
-    let retryAfterSeconds: number | undefined;
+    const retryAfterSeconds = parseRetryAfter(headers.get('Retry-After'));
     if (status === 429) {
       code = (errorPayload?.code as ErrorCode) || 'RATE_LIMITED';
-      const retryHeader = headers.get('Retry-After');
-      if (retryHeader) {
-        const parsed = parseInt(retryHeader, 10);
-        if (!isNaN(parsed)) {
-          retryAfterSeconds = parsed;
-        }
-      }
       message = retryAfterSeconds
         ? `Límite de solicitudes alcanzado. Por favor espera ${retryAfterSeconds} segundos.`
         : 'Límite de solicitudes alcanzado. Por favor intenta más tarde.';
