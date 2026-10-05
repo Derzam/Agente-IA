@@ -382,11 +382,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <div className="space-y-1.5 text-xs text-slate-300">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-1">
                   <span className="text-slate-400">WhatsApp Sandbox:</span>
-                  <span className="font-mono text-emerald-400">HMAC / Outbox activo</span>
+                  <span className="font-mono text-slate-300">No verificado por endpoint público</span>
                 </div>
                 <div className="flex items-center justify-between border-b border-slate-800 pb-1">
                   <span className="text-slate-400">OpenAI Responses:</span>
-                  <span className="font-mono text-sky-400">Backend integrado</span>
+                  <span className="font-mono text-slate-300">Sin estado público de runtime</span>
                 </div>
                 <div className="flex items-center justify-between border-b border-slate-800 pb-1">
                   <span className="text-slate-400">Atención en espera:</span>
@@ -396,11 +396,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </div>
                 <div className="flex items-center justify-between pt-0.5">
                   <span className="text-slate-400">Hosting:</span>
-                  <span className="text-amber-300 text-[11px]">Validación staging</span>
+                  <span className="text-amber-300 text-[11px]">No desplegado</span>
                 </div>
               </div>
               <p className="text-[11px] text-slate-400 leading-relaxed pt-1">
-                La UI refleja exclusivamente el estado verificado por backend. Sin simulación de proveedores ni deploys a producción.
+                El backend de Fase 5 está implementado, pero el panel no dispone todavía de endpoints públicos para verificar readiness de OpenAI, Meta o hosting.
               </p>
               <div className="pt-2 flex gap-2">
                 <Button
