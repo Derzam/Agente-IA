@@ -755,6 +755,88 @@ test("quote transport is encrypted atomically, one-shot and excluded from AI, lo
     1,
   );
 });
+test("expired encrypted quote is cancelled and replaced at a new cart version", async () => {
+  const f = await quoteFixture();
+  const cartBefore = (
+    await admin.query("SELECT * FROM app.carts WHERE business_id=$1", [
+      f.tenant,
+    ])
+  ).rows[0];
+  await admin.query(
+    "UPDATE app.confirmation_challenges SET expires_at=now()-interval '1 second' WHERE id=$1",
+    [f.challenge.id],
+  );
+
+  const replacement = await new OrderingService(
+    worker,
+    new EncryptedQuoteTransport(cipher),
+  ).requestQuote({ ...f.ctx, automationEpoch: 1 });
+
+  assert.notEqual(replacement.order.id, f.challenge.order_id);
+  assert.ok(replacement.confirmation_button);
+  const oldOrder = (
+    await admin.query("SELECT * FROM app.orders WHERE id=$1", [
+      f.challenge.order_id,
+    ])
+  ).rows[0];
+  assert.equal(oldOrder.status, "cancelled");
+  assert.equal(oldOrder.cancellation_reason, "QUOTE_EXPIRED");
+  const cartAfter = (
+    await admin.query("SELECT * FROM app.carts WHERE id=$1", [cartBefore.id])
+  ).rows[0];
+  assert.equal(cartAfter.status, "active");
+  assert.equal(cartAfter.version, cartBefore.version + 1);
+  const newOrder = (
+    await admin.query("SELECT * FROM app.orders WHERE id=$1", [
+      replacement.order.id,
+    ])
+  ).rows[0];
+  assert.equal(newOrder.source_cart_version, cartAfter.version);
+
+  const newChallenge = (
+    await admin.query(
+      "SELECT * FROM app.confirmation_challenges WHERE order_id=$1",
+      [replacement.order.id],
+    )
+  ).rows[0];
+  assert.ok(newChallenge.transport_cipher);
+  assert.equal(
+    cipher.open(
+      challengeBinding(
+        f.tenant,
+        f.ctx.conversation,
+        f.ctx.customer,
+        replacement.order.id,
+        replacement.order.version,
+        newChallenge.id,
+      ),
+      newChallenge.transport_cipher,
+    ),
+    replacement.confirmation_button,
+  );
+  assert.equal(
+    (
+      await admin.query(
+        "SELECT count(*)::int n FROM app.outbox_events WHERE business_id=$1 AND event_type='whatsapp.message'",
+        [f.tenant],
+      )
+    ).rows[0].n,
+    2,
+  );
+
+  const staleMessage = await insert("messages", {
+    business_id: f.tenant,
+    conversation_id: f.ctx.conversation,
+    direction: "inbound",
+    kind: "interactive",
+    content: { id: confirmationEvidence(f.button), title: "Confirm" },
+    actor_type: "customer",
+  });
+  await assert.rejects(
+    () => base.confirmOrder(f.ctx, staleMessage.id),
+    { code: "QUOTE_EXPIRED" },
+  );
+});
 test("Meta acceptance persists provider id and monotonic duplicated/out-of-order statuses", async () => {
   const f = await quoteFixture();
   const safety = new RuntimeSafety(worker, f.config.budget);
