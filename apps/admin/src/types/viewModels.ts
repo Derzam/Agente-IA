@@ -100,6 +100,7 @@ export interface ChatMessage {
   timestamp: string;
   isInternalNote?: boolean;
   orderReferenceId?: string;
+  outboxId?: string | null;
   deliveryStatus?: DeliveryStatus | null;
   failureCode?: string | null;
 }
