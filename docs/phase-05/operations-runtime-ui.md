@@ -2,12 +2,12 @@
 
 ## 1. Principio Fundamental: Fidelidad de Estado y Cero Simulación
 
-En modo real (`VITE_USE_MOCK_DATA=false`), el panel administrativo de **Agente-IA** refleja estrictamente el estado verificado por el backend y los proveedores aguas arriba.
+En modo real (`VITE_USE_MOCK_DATA=false`), el panel administrativo de **Agente-IA** solo refleja estados que el contrato público del backend puede demostrar. Cuando el backend no publica readiness o telemetría de un proveedor, la UI muestra explícitamente que ese estado no está disponible y no lo infiere.
 
 Reglas aplicadas sin excepción:
 - **Nunca inventar estado de proveedores** (Meta WhatsApp, OpenAI, Worker).
 - **Nunca asumir éxito prematuro**: una respuesta HTTP 202 de la API representa un mensaje **encolado** (`queued`) en el outbox transaccional, jamás un mensaje "enviado" o "entregado".
-- **Sin ping directo desde el navegador a Meta u OpenAI**: Toda la información de salud o readiness proviene del contrato oficial de la API de backend.
+- **Sin ping directo desde el navegador a Meta u OpenAI**: PR #16 no añade un endpoint público de readiness de proveedores; por ello el panel no muestra Meta/OpenAI como configurados o disponibles.
 - **Sin cálculo especulativo de costos monetarios**: Solo se presentan métricas operativas de consumo (tokens, llamadas a herramientas, turnos, cuota restante) reportadas oficialmente por el backend.
 
 ---
@@ -54,13 +54,9 @@ Cuando una conversación entra en estado de atención humana:
 
 En la pantalla de Configuración (`SettingsView`):
 - **Permiso del Negocio (`ai_enabled`)**: Switch de configuración claramente etiquetado como *"Automatización de IA permitida por el negocio"*. No se confunde con "OpenAI conectado".
-- **Salud del Runtime (`AiRuntimeStatus`)**:
-  - `enabled`: Habilitado y listo operativamente.
-  - `disabled`: Deshabilitado formalmente por la configuración de la empresa.
-  - `unavailable`: Proveedor de inferencia no disponible (503 / upstream caído).
-  - `rate_limited`: Límite de tasa excedido en OpenAI.
-  - `budget_exceeded`: Límite o cuota de consumo alcanzado.
-  - `circuit_open`: Disyuntor disparado.
+- **Estado técnico del runtime**: PR #16 implementa OpenAI/Meta internamente, pero mantiene las 49 operaciones públicas existentes y no publica un endpoint administrativo de readiness, modelo, circuito o presupuesto.
+- Los componentes de badges de proveedor conservan etiquetas locales de presentación para una futura integración, pero **no constituyen enums de API ni se alimentan con valores hardcodeados en real mode**.
+- `ai_enabled` continúa representando únicamente el permiso comercial del negocio.
 
 ---
 
