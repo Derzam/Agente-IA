@@ -911,6 +911,56 @@ describe('Phase 5 Operations & Runtime UI Suite', () => {
       expect(reconciledTimestampTieOnly.some((m) => m.id === 'outbox-receipt-tied')).toBe(true);
     });
 
+    it('prefers request sequence over clock comparison and evicts displaced receipt even if clock drifted backwards', () => {
+      const receiptCreatedAtMs = 10000;
+      const receiptSequence = 5;
+
+      const previousWithReceipt: ChatMessage[] = [
+        {
+          id: 'outbox-receipt-clock-drift',
+          outboxId: 'outbox-receipt-clock-drift',
+          anchorMessageId: 'msg-anchor-old',
+          createdAtMs: receiptCreatedAtMs,
+          requestSequence: receiptSequence,
+          conversationId: 'conv-1',
+          sender: 'staff',
+          type: 'text',
+          content: 'Mensaje enviado antes de que el reloj del sistema retrocediera',
+          timestamp: new Date(receiptCreatedAtMs).toISOString(),
+          deliveryStatus: 'queued',
+        },
+      ];
+
+      const incomingPage: ChatMessage[] = Array.from({ length: 20 }, (_, i) => ({
+        id: `msg-displacing-${i + 1}`,
+        conversationId: 'conv-1',
+        sender: 'customer' as const,
+        type: 'text' as const,
+        content: `Mensaje desplazador ${i + 1}`,
+        timestamp: new Date(receiptCreatedAtMs + 1000 + i * 1000).toISOString(),
+        deliveryStatus: 'read' as const,
+      }));
+
+      // Later poll has sequence 6 > 5 (was dispatched AFTER send).
+      // But suppose system clock jumped backward so pollInitiatedAtMs = 9000 <= 10000.
+      const backwardClockPollMs = 9000;
+      const laterPollSequence = 6;
+
+      const reconciled = reconcileConversationMessages(
+        previousWithReceipt,
+        incomingPage,
+        'conv-1',
+        backwardClockPollMs + 100,
+        backwardClockPollMs,
+        laterPollSequence
+      );
+
+      // Monotonic sequence overrides backward clock comparison: poll is recognized as later,
+      // and since the anchor is displaced from the 20-message page, the receipt is evicted.
+      expect(reconciled).toHaveLength(20);
+      expect(reconciled.some((m) => m.id === 'outbox-receipt-clock-drift')).toBe(false);
+    });
+
     it('preserves scroll position without snapping to bottom when operator scrolled up during send', () => {
       // Simulate container state when operator scrolled up while POST was in flight
       const containerElement = {

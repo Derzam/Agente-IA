@@ -76,16 +76,15 @@ export function reconcileConversationMessages(
       (Number.isNaN(Date.parse(message.timestamp)) ? 0 : Date.parse(message.timestamp));
 
     // Request-generation ordering:
-    // If the poll was initiated before or in the same tick as receipt creation
-    // (treating millisecond ties conservatively via <= or via monotonic sequence),
-    // the poll's response cannot contain its persisted counterpart.
-    // Never evict a receipt based on an in-flight poll dispatched before/during send.
-    if (
-      (pollSequence !== undefined &&
-        message.requestSequence !== undefined &&
-        pollSequence <= message.requestSequence) ||
-      pollInitiatedAtMs <= receiptCreatedTime
-    ) {
+    // When monotonic sequence numbers are available on both sides, prefer them exclusively
+    // to remain completely clock-independent (immune to system clock steps or NTP backward drift).
+    // Fall back to conservative timestamp comparison (<=) only when either sequence is unavailable.
+    const isPrecedingPoll =
+      pollSequence !== undefined && message.requestSequence !== undefined
+        ? pollSequence <= message.requestSequence
+        : pollInitiatedAtMs <= receiptCreatedTime;
+
+    if (isPrecedingPoll) {
       return true;
     }
 
