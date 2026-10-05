@@ -17,10 +17,7 @@ import { Tabs } from '@/components/common/Tabs';
 import { Modal } from '@/components/common/Modal';
 import { VersionConflictNotice } from '@/components/common/VersionConflictNotice';
 import { ApiErrorBanner } from '@/components/common/ApiErrorBanner';
-import {
-  ProviderStatusCard,
-  BudgetCard,
-} from '@/components/operations';
+import { BudgetCard } from '@/components/operations';
 import { settingsService } from '@/services/settingsService';
 import { deliveryZoneService } from '@/services/deliveryZoneService';
 import { BusinessSettings, DeliveryZone } from '@/types/viewModels';
@@ -628,29 +625,39 @@ export const SettingsView: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <ProviderStatusCard
-              title="OpenAI Responses API"
-              subtitle="Orquestador conversacional de IA (Responses API, sin Assistants)"
-              status="configured"
-              metrics={[
-                { label: 'Modelo', value: 'gpt-4o-mini' },
-                { label: 'Circuito', value: 'Cerrado (Normal)' },
-                { label: 'Transporte', value: 'Backend / Responses' },
-              ]}
-              notice="El frontend nunca consulta directamente a OpenAI ni almacena API keys. Todo el estado operativo proviene del backend."
-            />
+            <Card>
+              <CardHeader
+                title="OpenAI Responses API"
+                subtitle="Estado operativo no publicado por la API administrativa"
+              />
+              <CardBody className="space-y-2 text-xs text-slate-600">
+                <p className="font-semibold text-slate-800">Sin estado de runtime verificable desde el panel</p>
+                <p>
+                  El backend implementa el proveedor internamente, pero no expone todavía un contrato público
+                  de readiness, modelo, circuito o consumo para esta interfaz.
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  El panel no infiere configuración ni disponibilidad a partir de <code>ai_enabled</code>.
+                </p>
+              </CardBody>
+            </Card>
 
-            <ProviderStatusCard
-              title="Meta WhatsApp Cloud API"
-              subtitle="Canal de mensajería saliente y webhooks oficiales"
-              status="configured"
-              metrics={[
-                { label: 'Canal', value: 'WhatsApp Cloud' },
-                { label: 'Outbox', value: 'Reconciliación activa' },
-                { label: 'Ventana', value: '24 horas' },
-              ]}
-              notice="No se realiza ping directo desde el navegador a Meta. El worker gestiona el outbox y procesa webhooks con firma HMAC verificada."
-            />
+            <Card>
+              <CardHeader
+                title="Meta WhatsApp Cloud API"
+                subtitle="Estado operativo no publicado por la API administrativa"
+              />
+              <CardBody className="space-y-2 text-xs text-slate-600">
+                <p className="font-semibold text-slate-800">Sandbox externo aún no verificado desde el panel</p>
+                <p>
+                  No existe un endpoint administrativo que confirme credenciales, outbox activo, destinatario
+                  autorizado o disponibilidad remota del proveedor.
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  Los estados de entrega de mensajes sí se muestran cuando el backend los persiste en cada mensaje.
+                </p>
+              </CardBody>
+            </Card>
           </div>
 
           <BudgetCard />
