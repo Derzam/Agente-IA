@@ -18,5 +18,8 @@
     "admin:test": "npm run test --workspace=@agente-ia/admin",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "jsdom": "^26.1.0"
   }
 }

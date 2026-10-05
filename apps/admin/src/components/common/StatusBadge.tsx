@@ -13,6 +13,8 @@ import {
   UserCheck,
 } from 'lucide-react';
 
+export { OutboxStatusBadge } from '@/components/operations/OutboxStatusBadge';
+
 interface OrderStatusBadgeProps {
   status: OrderStatus;
   size?: 'sm' | 'md';

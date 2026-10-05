@@ -126,6 +126,7 @@ describe('Adapters Suite', () => {
       direction: 'inbound',
       kind: 'text',
       actor_type: 'customer',
+      outbox_id: null,
       text: 'Quiero hablar con un humano por favor',
       delivery_status: 'delivered',
     };

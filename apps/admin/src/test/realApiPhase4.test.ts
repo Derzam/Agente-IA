@@ -484,6 +484,7 @@ describe('Phase 4 Real API Integration Suite', () => {
         actor_type: 'human',
         text: 'Tu orden está lista',
         delivery_status: 'delivered',
+        outbox_id: null,
         version: 1,
         created_at: '2026-10-01T15:00:00Z',
         updated_at: '2026-10-01T15:00:01Z',
