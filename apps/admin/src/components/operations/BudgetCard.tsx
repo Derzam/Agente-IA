@@ -1,10 +1,10 @@
 import React from 'react';
 import { Card, CardHeader, CardBody } from '@/components/common/Card';
 import { Coins, HelpCircle } from 'lucide-react';
-import type { AiBudgetMetrics } from '@/types/viewModels';
+import type { OperationalBudgetSnapshot } from '@/types/viewModels';
 
 interface BudgetCardProps {
-  metrics?: AiBudgetMetrics | null;
+  metrics?: OperationalBudgetSnapshot | null;
   className?: string;
 }
 
