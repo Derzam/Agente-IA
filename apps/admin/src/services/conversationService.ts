@@ -128,6 +128,7 @@ export const conversationService = {
       content: text,
       timestamp: new Date().toISOString(),
       isInternalNote: false,
+      outboxId: receipt?.outbox_id || null,
       deliveryStatus: receipt?.status || 'queued',
     };
   },
