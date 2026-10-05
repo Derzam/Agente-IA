@@ -23,7 +23,7 @@ import { usePolling } from '@/hooks/usePolling';
 import { VersionConflictError, NetworkError, NormalizedApiError } from '@/api/types';
 import { newIdempotencyKey, USE_MOCK_DATA } from '@/services/apiClient';
 import { NavItemKey } from '@/components/layout/Sidebar';
-import { reconcileConversationMessages } from './messageReconciliation';
+import { reconcileConversationMessages, nextClientRequestSequence } from './messageReconciliation';
 
 const CANONICAL_REASONS: { id: HandoffReason; label: string }[] = [
   { id: 'explicit_request', label: 'Solicitud explícita del cliente' },
@@ -97,10 +97,18 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
     if (!convId) return;
     try {
       const pollInitiatedAt = Date.now();
+      const pollSequence = nextClientRequestSequence();
       const msgs = await conversationService.getMessages(convId, { signal });
       if (signal?.aborted || selectedConvIdRef.current !== convId) return;
       setMessages((prev) => {
-        const merged = reconcileConversationMessages(prev, msgs, convId, Date.now(), pollInitiatedAt);
+        const merged = reconcileConversationMessages(
+          prev,
+          msgs,
+          convId,
+          Date.now(),
+          pollInitiatedAt,
+          pollSequence
+        );
         if (
           prev.length === merged.length &&
           prev.every(

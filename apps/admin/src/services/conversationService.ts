@@ -8,7 +8,7 @@ import {
   mapDtoMessageToViewModel,
 } from '@/adapters/conversationAdapter';
 import type { RequestOptions } from '@/api/types';
-import { sortMessagesChronological } from '@/features/conversations/messageReconciliation';
+import { sortMessagesChronological, nextClientRequestSequence } from '@/features/conversations/messageReconciliation';
 
 let localConversations: ConversationSummary[] = [...mockConversations];
 let localMessages: Record<string, ChatMessage[]> = { ...mockMessagesByConversation };
@@ -88,6 +88,7 @@ export const conversationService = {
         isInternalNote,
         anchorMessageId: anchorMessageId ?? null,
         createdAtMs: now,
+        requestSequence: nextClientRequestSequence(),
       };
 
       if (!localMessages[conversationId]) {
@@ -137,6 +138,7 @@ export const conversationService = {
       outboxId: receipt?.outbox_id || null,
       anchorMessageId: anchorMessageId ?? null,
       createdAtMs: now,
+      requestSequence: nextClientRequestSequence(),
       deliveryStatus: receipt?.status || 'queued',
     };
   },

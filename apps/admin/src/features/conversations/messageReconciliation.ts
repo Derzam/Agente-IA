@@ -18,6 +18,15 @@ export function sortMessagesChronological(messages: ChatMessage[]): ChatMessage[
 
 export const QUEUED_RECEIPT_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+let clientRequestSequence = 0;
+export function nextClientRequestSequence(): number {
+  return ++clientRequestSequence;
+}
+
+export function resetClientRequestSequenceForTesting(initial = 0): void {
+  clientRequestSequence = initial;
+}
+
 /**
  * Reconciles canonical messages with optimistic 202 receipts.
  * - Enforces chronological order (created_at ASC) on incoming messages.
@@ -25,7 +34,8 @@ export const QUEUED_RECEIPT_TTL_MS = 5 * 60 * 1000; // 5 minutes
  * - Queued receipts are placed at the end of the transcript.
  * - Once the persisted message exposing the same outbox_id arrives,
  *   the optimistic queued receipt is removed without duplicate.
- * - Request-generation ordering: in-flight polls dispatched before the receipt was created
+ * - Request-generation ordering: in-flight polls dispatched before or at the same time as receipt creation
+ *   (guaranteed via monotonic request sequences and conservative timestamp tie handling)
  *   cannot contain its persisted counterpart and must never evict the receipt.
  * - If a tab was inactive or more than a full page of newer messages arrived,
  *   queued receipts older than the TTL or falling outside the bounded page window (>= 20 messages) are expired.
@@ -35,7 +45,8 @@ export function reconcileConversationMessages(
   incoming: ChatMessage[],
   conversationId: string,
   nowMs = Date.now(),
-  pollInitiatedAtMs = nowMs
+  pollInitiatedAtMs = nowMs,
+  pollSequence?: number
 ): ChatMessage[] {
   const scopedIncoming = incoming.filter((message) => message.conversationId === conversationId);
   const sortedIncoming = sortMessagesChronological(scopedIncoming);
@@ -65,9 +76,16 @@ export function reconcileConversationMessages(
       (Number.isNaN(Date.parse(message.timestamp)) ? 0 : Date.parse(message.timestamp));
 
     // Request-generation ordering:
-    // If the poll was initiated before this receipt was created, the poll's response
-    // cannot contain its persisted counterpart. Never evict a receipt based on an older in-flight poll.
-    if (pollInitiatedAtMs < receiptCreatedTime) {
+    // If the poll was initiated before or in the same tick as receipt creation
+    // (treating millisecond ties conservatively via <= or via monotonic sequence),
+    // the poll's response cannot contain its persisted counterpart.
+    // Never evict a receipt based on an in-flight poll dispatched before/during send.
+    if (
+      (pollSequence !== undefined &&
+        message.requestSequence !== undefined &&
+        pollSequence <= message.requestSequence) ||
+      pollInitiatedAtMs <= receiptCreatedTime
+    ) {
       return true;
     }
 

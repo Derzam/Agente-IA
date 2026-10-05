@@ -855,6 +855,62 @@ describe('Phase 5 Operations & Runtime UI Suite', () => {
       expect(reconciledPostSend.some((m) => m.id === 'outbox-receipt-concurrent')).toBe(false);
     });
 
+    it('preserves queued receipts when poll start and receipt creation timestamps tie within the same millisecond', () => {
+      const sameTickMs = 5000;
+
+      const previousWithReceipt: ChatMessage[] = [
+        {
+          id: 'outbox-receipt-tied',
+          outboxId: 'outbox-receipt-tied',
+          anchorMessageId: 'msg-anchor-old',
+          createdAtMs: sameTickMs,
+          requestSequence: 10,
+          conversationId: 'conv-1',
+          sender: 'staff',
+          type: 'text',
+          content: 'Mensaje enviado exactamente en el mismo tick de reloj',
+          timestamp: new Date(sameTickMs).toISOString(),
+          deliveryStatus: 'queued',
+        },
+      ];
+
+      const incomingPage: ChatMessage[] = Array.from({ length: 20 }, (_, i) => ({
+        id: `msg-displacing-${i + 1}`,
+        conversationId: 'conv-1',
+        sender: 'customer' as const,
+        type: 'text' as const,
+        content: `Mensaje desplazador ${i + 1}`,
+        timestamp: new Date(sameTickMs + 1000 + i * 1000).toISOString(),
+        deliveryStatus: 'read' as const,
+      }));
+
+      // In-flight poll dispatched in the exact same millisecond (pollInitiatedAtMs === sameTickMs)
+      // and with pollSequence = 9 <= receiptSequence = 10
+      const reconciled = reconcileConversationMessages(
+        previousWithReceipt,
+        incomingPage,
+        'conv-1',
+        sameTickMs + 200,
+        sameTickMs,
+        9
+      );
+
+      // Must be preserved due to conservative tie handling and monotonic sequence ordering
+      expect(reconciled).toHaveLength(21);
+      expect(reconciled.some((m) => m.id === 'outbox-receipt-tied')).toBe(true);
+
+      // Also verify pure timestamp tie without sequence numbers:
+      const reconciledTimestampTieOnly = reconcileConversationMessages(
+        previousWithReceipt,
+        incomingPage,
+        'conv-1',
+        sameTickMs + 200,
+        sameTickMs
+      );
+      expect(reconciledTimestampTieOnly).toHaveLength(21);
+      expect(reconciledTimestampTieOnly.some((m) => m.id === 'outbox-receipt-tied')).toBe(true);
+    });
+
     it('preserves scroll position without snapping to bottom when operator scrolled up during send', () => {
       // Simulate container state when operator scrolled up while POST was in flight
       const containerElement = {

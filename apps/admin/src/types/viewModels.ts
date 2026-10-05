@@ -103,6 +103,7 @@ export interface ChatMessage {
   outboxId?: string | null;
   anchorMessageId?: string | null;
   createdAtMs?: number;
+  requestSequence?: number;
   deliveryStatus?: DeliveryStatus | null;
   failureCode?: string | null;
 }
