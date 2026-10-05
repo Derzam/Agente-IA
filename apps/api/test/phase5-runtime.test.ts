@@ -38,6 +38,8 @@ import { PostgresInboxRepository } from "../src/modules/inbox/infrastructure/pos
 import { ingressLimiter } from "../src/platform/ingress-limits.js";
 import { buildApp } from "../src/bootstrap/app.js";
 import type { Config } from "../src/config/env.js";
+import { DomainTransactions } from "../src/modules/domain/application/transaction.js";
+import { OperationsService } from "../src/modules/domain/application/operations.js";
 const source = new URL(process.env.TEST_DATABASE_URL ?? "invalid:");
 if (
   !["localhost", "127.0.0.1", "[::1]"].includes(source.hostname) ||
@@ -1335,6 +1337,125 @@ test("runtime metadata has RLS and denies cross-tenant worker and API budget wri
     { code: "42501" },
   );
 });
+function inboundText(f: Awaited<ReturnType<typeof fixture>>, id: string, sender = f.recipient) {
+  return normalizeEnvelope({ object: "whatsapp_business_account", entry: [{ id: "synthetic", changes: [{ field: "messages", value: {
+    metadata: { phone_number_id: f.phone }, messages: [{ from: sender, id, timestamp: String(Math.floor(Date.now() / 1000)), type: "text", text: { body: "Menú" } }],
+  } }] }] }).events;
+}
+function tenantRuntimePool(tenant: string) {
+  // Limit scheduler discovery to this fixture; scoped DB operations use the real worker LOGIN.
+  return {
+    query: async (sql: string, values?: any[]) => sql.startsWith("SELECT id FROM app.businesses")
+      ? { rows: [{ id: tenant }] } : worker.query(sql, values),
+    connect: () => worker.connect(),
+  } as pg.Pool;
+}
+async function handoffOperator(f: Awaited<ReturnType<typeof fixture>>) {
+  const user = randomUUID();
+  await admin.query("INSERT INTO auth.users(id) VALUES($1)", [user]);
+  await insert("business_memberships", { business_id: f.tenant, user_id: user, role: "owner" });
+  return async (action: "claim" | "resolve") => {
+    const handoff = (await admin.query("SELECT * FROM app.human_handoffs WHERE business_id=$1", [f.tenant])).rows[0];
+    const body = action === "claim"
+      ? { expected_version: handoff.version, assigned_user_id: user }
+      : { expected_version: handoff.version, action: "resume_bot", resolution: "Synthetic operator resume" };
+    const request = randomUUID();
+    return new DomainTransactions(api).run({ user, tenant: f.tenant, roles: ["owner"], operation: "handoff." + action, key: randomUUID(), request, input: body },
+      (r, role) => new OperationsService().execute(r, { id: user, type: "human", role }, {
+        method: "post", path: "/handoffs/{handoff_id}/" + action, params: { handoff_id: handoff.id }, query: {}, body, request,
+      }));
+  };
+}
+test("expired AI conversation cannot starve a newer conversation of the same tenant", async () => {
+  const f = await fixture();
+  await admin.query("UPDATE app.conversations SET expires_at=now()-interval '1 second' WHERE id=$1", [f.ctx.conversation]);
+  const customer = await insert("customers", { business_id: f.tenant, channel_user_id: f.recipient + "1" });
+  const conversation = await insert("conversations", { business_id: f.tenant, customer_id: customer.id, channel_id: f.channel, expires_at: new Date(Date.now() + 3600000) });
+  const inbound = await insert("messages", { business_id: f.tenant, conversation_id: conversation.id, direction: "inbound", kind: "text", actor_type: "customer", content: { text: "Menú" } });
+  assert.equal(await store.pending(f.tenant), inbound.id);
+  assert.equal(await store.start(f.tenant, f.inbound, "synthetic-model"), null);
+  f.config.metaEnabled = false;
+  let calls = 0;
+  const runtime = new RuntimeWorker(tenantRuntimePool(f.tenant), f.config, () => {}, { ai: { respond: async () => { calls++; return reply(); } } });
+  await runtime.tick(); await runtime.drain();
+  assert.equal(calls, 1);
+  assert.equal((await admin.query("SELECT inbound_message_id FROM app.conversation_turns WHERE business_id=$1", [f.tenant])).rows[0].inbound_message_id, inbound.id);
+});
+test("AI selection skips a held conversation and recovers its queued work after lease expiry", async () => {
+  const f = await fixture(), held = (await store.start(f.tenant, f.inbound, "synthetic-model"))!;
+  const queued = await insert("messages", { business_id: f.tenant, conversation_id: f.ctx.conversation, direction: "inbound", kind: "text", actor_type: "customer", content: { text: "Otro mensaje" } });
+  const customer = await insert("customers", { business_id: f.tenant, channel_user_id: f.recipient + "1" });
+  const conversation = await insert("conversations", { business_id: f.tenant, customer_id: customer.id, channel_id: f.channel, expires_at: new Date(Date.now() + 3600000) });
+  const other = await insert("messages", { business_id: f.tenant, conversation_id: conversation.id, direction: "inbound", kind: "text", actor_type: "customer", content: { text: "Menú" } });
+  assert.equal(await store.pending(f.tenant), other.id);
+  await admin.query("UPDATE app.conversation_turns SET lease_until=now()-interval '1 second' WHERE id=$1", [held.id]);
+  assert.equal(await store.pending(f.tenant), queued.id);
+  assert.ok(await store.start(f.tenant, queued.id, "synthetic-model"));
+  assert.equal((await admin.query("SELECT error_code FROM app.conversation_turns WHERE id=$1", [held.id])).rows[0].error_code, "AI_TURN_INTERRUPTED");
+});
+for (const phase of ["human_pending", "human_active", "delayed_ingress"] as const)
+  test(`messages from ${phase} cannot replay after resume, while fresh messages can run`, async () => {
+    const f = await fixture();
+    f.config.aiEnabled = false; f.config.metaEnabled = false;
+    await base.requestHuman(f.ctx, randomUUID(), "explicit_request");
+    const operator = await handoffOperator(f);
+    if (phase !== "human_pending") await operator("claim");
+    const ingressRepo = new PostgresInboxRepository(ingress), id = "wamid.handoff." + randomUUID();
+    await ingressRepo.ingest(inboundText(f, id));
+    const disabled = new RuntimeWorker(tenantRuntimePool(f.tenant), f.config);
+    if (phase !== "delayed_ingress") { await disabled.tick(); await disabled.drain(); }
+    if (phase === "human_pending") await operator("claim");
+    await operator("resolve");
+    if (phase === "delayed_ingress") { await disabled.tick(); await disabled.drain(); }
+    const message = (await admin.query("SELECT * FROM app.messages WHERE business_id=$1 AND provider_message_id=$2", [f.tenant, id])).rows[0];
+    const disposition = (await admin.query("SELECT * FROM app.conversation_turns WHERE inbound_message_id=$1", [message.id])).rows[0];
+    assert.equal(disposition.status, "failed"); assert.equal(disposition.error_code, "AI_INBOUND_HANDOFF");
+    assert.equal(disposition.provider, null); assert.equal(disposition.responses, 0);
+    assert.equal(await store.pending(f.tenant), undefined);
+    assert.equal(await store.start(f.tenant, message.id, "synthetic-model"), null);
+    assert.equal(await store.start(f.tenant, f.inbound, "synthetic-model"), null);
+    f.config.aiEnabled = true;
+    let calls = 0;
+    const resumed = new RuntimeWorker(tenantRuntimePool(f.tenant), f.config, () => {}, { ai: { respond: async () => { calls++; return reply(); } } });
+    await resumed.tick(); await resumed.drain(); assert.equal(calls, 0);
+    await ingressRepo.ingest(inboundText(f, "wamid.fresh." + randomUUID()));
+    await resumed.tick(); await resumed.drain(); assert.equal(calls, 1);
+    assert.equal((await admin.query("SELECT count(*)::int n FROM app.cart_items WHERE business_id=$1", [f.tenant])).rows[0].n, 0);
+  });
+for (const scope of ["customer", "tenant"] as const)
+  test(`inbound ${scope} rate limit defers without spending failure attempts or quota`, async () => {
+    const f = await fixture(); f.config.aiEnabled = false; f.config.metaEnabled = false;
+    const observations: Record<string, unknown>[] = [];
+    const runtime = new RuntimeWorker(worker, f.config, v => observations.push(v));
+    const id = "wamid.inbound-rate." + randomUUID();
+    await new PostgresInboxRepository(ingress).ingest(inboundText(f, id));
+    const event = (await admin.query("SELECT * FROM app.webhook_events WHERE business_id=$1", [f.tenant])).rows[0];
+    await admin.query("UPDATE app.webhook_events SET attempts=4 WHERE id=$1", [event.id]);
+    for (const [key, count] of [["tenant", scope === "tenant" ? 600 : 7], [f.ctx.customer, scope === "customer" ? 30 : 3]] as const)
+      await admin.query("INSERT INTO app.runtime_windows(business_id,kind,scope,window_start,count) SELECT $1,'inbound',$2,date_trunc('minute',clock_timestamp())+make_interval(mins=>n),$3 FROM generate_series(-1,1) n", [f.tenant, key, count]);
+    const counters = async () => (await admin.query("SELECT scope,window_start,count FROM app.runtime_windows WHERE business_id=$1 AND kind='inbound' ORDER BY scope,window_start", [f.tenant])).rows;
+    const before = await counters();
+    for (let n = 0; n < 6; n++) {
+      await admin.query("UPDATE app.webhook_events SET next_attempt_at=now()-interval '1 second' WHERE id=$1", [event.id]);
+      const lease = (await runtime.internal.claim(f.tenant, "inbox"))!;
+      assert.equal(await runtime.internal.process(lease), false);
+      assert.equal(await runtime.internal.process(lease), false);
+      const deferred = (await admin.query("SELECT * FROM app.webhook_events WHERE id=$1", [event.id])).rows[0];
+      assert.equal(deferred.status, "pending"); assert.equal(deferred.attempts, 4);
+      assert.equal(deferred.last_error_code, "INBOUND_RATE_LIMITED");
+      assert.ok(deferred.next_attempt_at > new Date());
+      assert.equal(await runtime.internal.claim(f.tenant, "inbox"), null);
+    }
+    assert.deepEqual(await counters(), before);
+    assert.equal((await admin.query("SELECT count(*)::int n FROM app.messages WHERE business_id=$1 AND provider_message_id=$2", [f.tenant, id])).rows[0].n, 0);
+    assert.ok(observations.every(v => v.event_type === "worker.deferred"));
+    await admin.query("UPDATE app.runtime_windows SET count=0 WHERE business_id=$1 AND kind='inbound'", [f.tenant]);
+    await admin.query("UPDATE app.webhook_events SET next_attempt_at=now()-interval '1 second' WHERE id=$1", [event.id]);
+    assert.ok(await runtime.internal.process((await runtime.internal.claim(f.tenant, "inbox"))!));
+    const processed = (await admin.query("SELECT status,attempts FROM app.webhook_events WHERE id=$1", [event.id])).rows[0];
+    assert.equal(processed.status, "processed"); assert.equal(processed.attempts, 5);
+    assert.equal((await admin.query("SELECT count(*)::int n FROM app.messages WHERE business_id=$1 AND provider_message_id=$2", [f.tenant, id])).rows[0].n, 1);
+  });
 test("feature flags disabled invoke neither provider and paused conversations create no turn", async () => {
   const f = await fixture();
   f.config.aiEnabled = false;

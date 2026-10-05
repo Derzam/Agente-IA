@@ -24,6 +24,7 @@ export class InternalWorker {
     readonly extensions?: {
       status?: (r: Repository, event: Row) => Promise<boolean>;
       inbound?: (r: Repository, customer: string) => Promise<void>;
+      received?: (r: Repository, message: Row, conversation: Row, event: Row) => Promise<void>;
       confirmed?: (
         r: Repository,
         ctx: import("../modules/domain/application/ordering.js").CustomerContext,
@@ -107,6 +108,17 @@ export class InternalWorker {
     return this.scoped(lease.tenant, async (r) => {
       const table =
         lease.queue === "inbox" ? "webhook_events" : "outbox_events";
+      if (lease.queue === "inbox" && code === "RATE_LIMITED") {
+        const result = await r.db.query(
+          "UPDATE app.webhook_events SET status='pending',attempts=greatest(0,attempts-1),lease_until=NULL,next_attempt_at=date_trunc('minute',clock_timestamp())+interval '1 minute',last_error_code='INBOUND_RATE_LIMITED' WHERE business_id=$1 AND id=$2 AND fencing_token=$3 AND status='processing' AND lease_until>clock_timestamp() RETURNING attempts",
+          [lease.tenant, lease.id, lease.token],
+        );
+        if (result.rowCount === 1) this.observe({
+          event_type: "worker.deferred", business_id: lease.tenant, job_id: lease.id,
+          error_code: "INBOUND_RATE_LIMITED", attempts: result.rows[0].attempts,
+        });
+        return result.rowCount === 1;
+      }
       const result = await r.db.query(
         `UPDATE app.${table} SET status=CASE WHEN attempts>=$4 THEN 'dead_letter' ELSE 'pending' END,lease_until=NULL,next_attempt_at=clock_timestamp()+make_interval(secs=>least(3600,power(2,least(attempts,10))::integer)) ${lease.queue === "inbox" ? ",last_error_code=$5" : ""} WHERE business_id=$1 AND id=$2 AND fencing_token=$3 AND status=$${lease.queue === "inbox" ? 6 : 5} AND lease_until>clock_timestamp() RETURNING status,attempts`,
         lease.queue === "inbox"
@@ -279,6 +291,7 @@ export class InternalWorker {
       );
     }
     await outbox(r, "message.received", m, event.id, c.id);
+    await this.extensions?.received?.(r, m, c, event);
     if (
       p.kind === "interactive" &&
       typeof content.id === "string" &&

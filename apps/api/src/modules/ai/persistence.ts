@@ -14,6 +14,26 @@ import {
   ChallengeCipher,
   challengeBinding,
 } from "../../providers/meta/challenge-cipher.js";
+// Use the durable ingress timestamp when available; provider clocks are not a handoff boundary.
+const inboundAfterHandoff = `NOT EXISTS(
+ SELECT 1 FROM app.human_handoffs h
+ JOIN app.conversations hc ON hc.business_id=h.business_id AND hc.id=h.conversation_id
+ WHERE h.business_id=m.business_id AND hc.customer_id=c.customer_id AND hc.channel_id=c.channel_id
+ AND h.resolved_at>=coalesce((SELECT min(w.created_at) FROM app.webhook_events w
+  WHERE w.business_id=m.business_id AND w.channel_id=c.channel_id AND w.event_type='message'
+  AND w.payload->>'provider_message_id'=m.provider_message_id),m.created_at))`;
+export async function disposeHandoffInbound(r: Repository, message: Row, conversation: Row, event: Row) {
+  if (!["text", "location"].includes(message.kind)) return;
+  const resumed = (await r.db.query(
+    "SELECT max(h.resolved_at) resumed_at FROM app.human_handoffs h JOIN app.conversations c ON c.business_id=h.business_id AND c.id=h.conversation_id WHERE h.business_id=$1 AND c.customer_id=$2 AND c.channel_id=$3",
+    [r.tenant, conversation.customer_id, conversation.channel_id],
+  )).rows[0]?.resumed_at;
+  if (conversation.status === "bot_active" && (!resumed || event.created_at > resumed)) return;
+  await r.db.query(
+    "INSERT INTO app.conversation_turns(business_id,conversation_id,inbound_message_id,automation_epoch,status,completed_at,error_code) VALUES($1,$2,$3,$4,'failed',clock_timestamp(),'AI_INBOUND_HANDOFF') ON CONFLICT(business_id,inbound_message_id) DO NOTHING",
+    [r.tenant, conversation.id, message.id, conversation.automation_epoch],
+  );
+}
 async function enqueue(
   r: Repository,
   ctx: CustomerContext,
@@ -113,6 +133,10 @@ export class PostgresAiPersistence implements AiPersistence {
         !(await r.one("business_settings", tenant)).ai_enabled
       )
         return null;
+      if (!(await r.db.query(
+        `SELECT 1 FROM app.messages m JOIN app.conversations c ON c.business_id=m.business_id AND c.id=m.conversation_id WHERE m.business_id=$1 AND m.id=$2 AND ${inboundAfterHandoff}`,
+        [tenant, inbound],
+      )).rowCount) return null;
       if (
         (
           await r.db.query(
@@ -305,7 +329,7 @@ export class PostgresAiPersistence implements AiPersistence {
       async (r) =>
         (
           await r.db.query(
-            "SELECT m.id FROM app.messages m JOIN app.conversations c ON c.business_id=m.business_id AND c.id=m.conversation_id JOIN app.business_settings s ON s.business_id=m.business_id WHERE m.business_id=$1 AND m.direction='inbound' AND m.kind IN ('text','location') AND c.status='bot_active' AND s.ai_enabled AND NOT EXISTS(SELECT 1 FROM app.conversation_turns t WHERE t.business_id=m.business_id AND t.inbound_message_id=m.id) ORDER BY m.created_at,m.id LIMIT 1",
+            `SELECT m.id FROM app.messages m JOIN app.conversations c ON c.business_id=m.business_id AND c.id=m.conversation_id JOIN app.business_settings s ON s.business_id=m.business_id WHERE m.business_id=$1 AND m.direction='inbound' AND m.kind IN ('text','location') AND c.status='bot_active' AND c.expires_at>clock_timestamp() AND s.ai_enabled AND ${inboundAfterHandoff} AND NOT EXISTS(SELECT 1 FROM app.conversation_turns t WHERE t.business_id=m.business_id AND t.inbound_message_id=m.id) AND NOT EXISTS(SELECT 1 FROM app.conversation_turns t WHERE t.business_id=m.business_id AND t.conversation_id=c.id AND t.status IN ('pending','planned') AND (t.lease_until IS NULL OR t.lease_until>clock_timestamp())) ORDER BY m.created_at,m.id LIMIT 1`,
             [tenant],
           )
         ).rows[0]?.id as string | undefined,

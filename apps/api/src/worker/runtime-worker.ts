@@ -8,6 +8,7 @@ import { ToolExecutor } from "../modules/ai/tools.js";
 import {
   PostgresAiPersistence,
   EncryptedQuoteTransport,
+  disposeHandoffInbound,
 } from "../modules/ai/persistence.js";
 import { OrderingService } from "../modules/domain/application/ordering.js";
 import { ChallengeCipher } from "../providers/meta/challenge-cipher.js";
@@ -42,6 +43,7 @@ export class RuntimeWorker {
         : undefined;
     this.internal = new InternalWorker(pool, 5, 30, observe, {
       status: reconcileStatus,
+      received: disposeHandoffInbound,
       confirmed: config.aiEnabled
         ? (r, ctx, order, inbound) =>
             this.store.confirmedWithin(r, ctx, order, inbound)
