@@ -16,6 +16,8 @@ export function sortMessagesChronological(messages: ChatMessage[]): ChatMessage[
   });
 }
 
+export const QUEUED_RECEIPT_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Reconciles canonical messages with optimistic 202 receipts.
  * - Enforces chronological order (created_at ASC) on incoming messages.
@@ -23,11 +25,14 @@ export function sortMessagesChronological(messages: ChatMessage[]): ChatMessage[
  * - Queued receipts are placed at the end of the transcript.
  * - Once the persisted message exposing the same outbox_id arrives,
  *   the optimistic queued receipt is removed without duplicate.
+ * - If a tab was inactive or more than a full page of newer messages arrived,
+ *   queued receipts older than the TTL or falling outside the bounded page window (>= 20 messages) are expired.
  */
 export function reconcileConversationMessages(
   previous: ChatMessage[],
   incoming: ChatMessage[],
-  conversationId: string
+  conversationId: string,
+  nowMs = Date.now()
 ): ChatMessage[] {
   const scopedIncoming = incoming.filter((message) => message.conversationId === conversationId);
   const sortedIncoming = sortMessagesChronological(scopedIncoming);
@@ -39,6 +44,10 @@ export function reconcileConversationMessages(
       .filter((outboxId): outboxId is string => Boolean(outboxId))
   );
 
+  const oldestIncomingTime = sortedIncoming.length > 0
+    ? (Number.isNaN(Date.parse(sortedIncoming[0].timestamp)) ? 0 : Date.parse(sortedIncoming[0].timestamp))
+    : 0;
+
   const queued = previous.filter((message) => {
     if (message.conversationId !== conversationId || message.deliveryStatus !== 'queued') {
       return false;
@@ -48,7 +57,23 @@ export function reconcileConversationMessages(
     }
 
     const optimisticOutboxId = message.outboxId ?? message.id;
-    return !confirmedOutboxIds.has(optimisticOutboxId);
+    if (confirmedOutboxIds.has(optimisticOutboxId)) {
+      return false;
+    }
+
+    const msgTime = Number.isNaN(Date.parse(message.timestamp)) ? 0 : Date.parse(message.timestamp);
+
+    // 1. Expire receipts that exceed the TTL (e.g., after long inactive tab)
+    if (msgTime > 0 && nowMs - msgTime > QUEUED_RECEIPT_TTL_MS) {
+      return false;
+    }
+
+    // 2. Drop receipts that fall outside the bounded page window (when page is full with >= 20 newer messages)
+    if (sortedIncoming.length >= 20 && oldestIncomingTime > 0 && msgTime > 0 && msgTime < oldestIncomingTime) {
+      return false;
+    }
+
+    return true;
   });
 
   const sortedQueued = sortMessagesChronological(queued);

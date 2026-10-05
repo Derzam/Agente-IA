@@ -193,7 +193,10 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
         keyToUse
       );
       retainedMessageKeysRef.current.delete(gestureKey);
-      isNearBottomRef.current = true;
+      if (messagesContainerRef.current) {
+        const el = messagesContainerRef.current;
+        isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+      }
       setMessages((prev) => [...prev, newMsg]);
       setInputText('');
 

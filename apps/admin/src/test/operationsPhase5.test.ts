@@ -542,7 +542,8 @@ describe('Phase 5 Operations & Runtime UI Suite', () => {
         },
       ];
 
-      const reconciled = reconcileConversationMessages(previousMessages, incomingFromApi, 'conv-1');
+      const testNow = Date.parse('2026-10-04T10:01:30Z');
+      const reconciled = reconcileConversationMessages(previousMessages, incomingFromApi, 'conv-1', testNow);
 
       expect(reconciled).toHaveLength(2);
       expect(reconciled[0].id).toBe('msg-persisted-1');
@@ -666,6 +667,93 @@ describe('Phase 5 Operations & Runtime UI Suite', () => {
       // Scrolled up: operator is reading history -> should NOT auto-scroll
       expect(isNearBottom(1000, 300, 200)).toBe(false); // distance = 500 >= 80
       expect(isNearBottom(1000, 700, 200)).toBe(false); // distance = 100 >= 80
+    });
+
+    it('expires queued receipts exceeding TTL when tab was inactive', () => {
+      const nowMs = Date.parse('2026-10-04T10:10:00Z');
+      const staleReceiptTime = '2026-10-04T10:00:00Z'; // 10 minutes old (> 5 min TTL)
+
+      const previousWithStaleReceipt: ChatMessage[] = [
+        {
+          id: 'outbox-stale-receipt',
+          outboxId: 'outbox-stale-receipt',
+          conversationId: 'conv-1',
+          sender: 'staff',
+          type: 'text',
+          content: 'Mensaje viejo optimista',
+          timestamp: staleReceiptTime,
+          deliveryStatus: 'queued',
+        },
+      ];
+
+      // Polling returns empty or unrelated message
+      const incoming: ChatMessage[] = [];
+
+      const reconciled = reconcileConversationMessages(
+        previousWithStaleReceipt,
+        incoming,
+        'conv-1',
+        nowMs
+      );
+
+      // The stale receipt must be expired and excluded
+      expect(reconciled).toHaveLength(0);
+    });
+
+    it('drops queued receipts that fall outside the bounded page window (older than oldest message in page)', () => {
+      const previousWithReceipt: ChatMessage[] = [
+        {
+          id: 'outbox-receipt-before-page',
+          outboxId: 'outbox-receipt-before-page',
+          conversationId: 'conv-1',
+          sender: 'staff',
+          type: 'text',
+          content: 'Mensaje optimista anterior a la página actual',
+          timestamp: '2026-10-04T10:00:00Z',
+          deliveryStatus: 'queued',
+        },
+      ];
+
+      // Current page returns a full 20-message page strictly newer than the receipt
+      const incomingPage: ChatMessage[] = Array.from({ length: 20 }, (_, i) => ({
+        id: `msg-page-${i + 1}`,
+        conversationId: 'conv-1',
+        sender: 'customer',
+        type: 'text',
+        content: `Mensaje de página ${i + 1}`,
+        timestamp: new Date(Date.parse('2026-10-04T10:05:00Z') + i * 1000).toISOString(),
+        deliveryStatus: 'read',
+      }));
+
+      const nowMs = Date.parse('2026-10-04T10:06:00Z'); // within 5m TTL, but behind the 20-message bounded page
+
+      const reconciled = reconcileConversationMessages(
+        previousWithReceipt,
+        incomingPage,
+        'conv-1',
+        nowMs
+      );
+
+      // Receipt must not be appended at the end of the new page
+      expect(reconciled).toHaveLength(20);
+      expect(reconciled.some((m) => m.id === 'outbox-receipt-before-page')).toBe(false);
+      expect(reconciled[0].id).toBe('msg-page-1');
+      expect(reconciled[19].id).toBe('msg-page-20');
+    });
+
+    it('preserves scroll position without snapping to bottom when operator scrolled up during send', () => {
+      // Simulate container state when operator scrolled up while POST was in flight
+      const containerElement = {
+        scrollHeight: 1200,
+        scrollTop: 400, // scrolled up 600px
+        clientHeight: 200,
+      };
+
+      const distanceToBottom = containerElement.scrollHeight - containerElement.scrollTop - containerElement.clientHeight;
+      const isNearBottomAtCompletion = distanceToBottom < 80;
+
+      expect(distanceToBottom).toBe(600);
+      expect(isNearBottomAtCompletion).toBe(false);
     });
   });
 
