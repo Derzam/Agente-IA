@@ -8,6 +8,7 @@ import {
 import { shouldRunPolling } from '../hooks/usePolling';
 import type { Message as DTOMessage } from '@agente-ia/shared';
 import type { ChatMessage, DeliveryStatus } from '../types/viewModels';
+import { RUNTIME_PRESENTATION, RUNTIME_READINESS_PUBLIC } from '../components/operations/runtimePresentation';
 
 describe('Phase 5 Operations & Runtime UI Suite', () => {
   const originalFetch = globalThis.fetch;
@@ -553,4 +554,25 @@ describe('Phase 5 Operations & Runtime UI Suite', () => {
       expect(http202Response.delivery_status).not.toBe('delivered');
     });
   });
+  // -------------------------------------------------------------
+  // 10. RUNTIME READINESS MUST REMAIN HONEST
+  // -------------------------------------------------------------
+  describe('10. Runtime Readiness Truthfulness', () => {
+    it('does not claim public provider readiness before a backend contract exists', () => {
+      expect(RUNTIME_READINESS_PUBLIC).toBe(false);
+      expect(RUNTIME_PRESENTATION.openai.status).toBe('Sin estado público de runtime');
+      expect(RUNTIME_PRESENTATION.meta.status).toBe('No verificado por endpoint público');
+      expect(RUNTIME_PRESENTATION.hosting.status).toBe('No desplegado');
+    });
+
+    it('does not hardcode a provider model, circuit health or active outbox in neutral presentation', () => {
+      const serialized = JSON.stringify(RUNTIME_PRESENTATION);
+      expect(serialized).not.toContain('gpt-4o-mini');
+      expect(serialized).not.toContain('Cerrado (Normal)');
+      expect(serialized).not.toContain('Reconciliación activa');
+      expect(serialized).not.toContain('Backend integrado');
+      expect(serialized).not.toContain('HMAC / Outbox activo');
+    });
+  });
+
 });
