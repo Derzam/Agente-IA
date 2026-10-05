@@ -11,16 +11,25 @@ import {
   ShieldCheck,
   ShieldAlert,
 } from 'lucide-react';
-import type { ProviderChannelStatus, AiRuntimeStatus } from '@/types/viewModels';
-
-export type UnifiedProviderStatus =
-  | ProviderChannelStatus
-  | AiRuntimeStatus
+/**
+ * Presentation-only labels for future provider status UI.
+ * These values are not an API/shared contract and must not be populated
+ * in real mode until the backend publishes an authoritative status.
+ */
+export type LocalProviderBadgeStatus =
+  | 'configured'
+  | 'not_configured'
+  | 'degraded'
+  | 'available'
+  | 'unavailable'
+  | 'circuit_open'
+  | 'rate_limited'
+  | 'budget_exceeded'
   | 'enabled'
   | 'disabled';
 
 interface ProviderStatusBadgeProps {
-  status: UnifiedProviderStatus;
+  status: LocalProviderBadgeStatus;
   size?: 'sm' | 'md';
   className?: string;
 }
