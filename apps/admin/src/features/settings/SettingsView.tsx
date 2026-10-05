@@ -18,6 +18,7 @@ import { Modal } from '@/components/common/Modal';
 import { VersionConflictNotice } from '@/components/common/VersionConflictNotice';
 import { ApiErrorBanner } from '@/components/common/ApiErrorBanner';
 import { BudgetCard } from '@/components/operations';
+import { RUNTIME_PRESENTATION } from '@/components/operations/runtimePresentation';
 import { settingsService } from '@/services/settingsService';
 import { deliveryZoneService } from '@/services/deliveryZoneService';
 import { BusinessSettings, DeliveryZone } from '@/types/viewModels';
@@ -633,8 +634,7 @@ export const SettingsView: React.FC = () => {
               <CardBody className="space-y-2 text-xs text-slate-600">
                 <p className="font-semibold text-slate-800">Sin estado de runtime verificable desde el panel</p>
                 <p>
-                  El backend implementa el proveedor internamente, pero no expone todavía un contrato público
-                  de readiness, modelo, circuito o consumo para esta interfaz.
+                  {RUNTIME_PRESENTATION.openai.detail}
                 </p>
                 <p className="text-[11px] text-slate-500">
                   El panel no infiere configuración ni disponibilidad a partir de <code>ai_enabled</code>.
@@ -650,8 +650,7 @@ export const SettingsView: React.FC = () => {
               <CardBody className="space-y-2 text-xs text-slate-600">
                 <p className="font-semibold text-slate-800">Sandbox externo aún no verificado desde el panel</p>
                 <p>
-                  No existe un endpoint administrativo que confirme credenciales, outbox activo, destinatario
-                  autorizado o disponibilidad remota del proveedor.
+                  {RUNTIME_PRESENTATION.meta.detail}
                 </p>
                 <p className="text-[11px] text-slate-500">
                   Los estados de entrega de mensajes sí se muestran cuando el backend los persiste en cada mensaje.
