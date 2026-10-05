@@ -104,30 +104,7 @@ export interface ChatMessage {
   failureCode?: string | null;
 }
 
-export type ProviderChannelStatus =
-  | 'configured'
-  | 'not_configured'
-  | 'degraded'
-  | 'available'
-  | 'unavailable';
-
-export type AiRuntimeStatus =
-  | 'enabled'
-  | 'disabled'
-  | 'unavailable'
-  | 'rate_limited'
-  | 'budget_exceeded'
-  | 'circuit_open';
-
-export interface ProviderReadinessInfo {
-  provider: 'meta' | 'openai' | 'worker';
-  status: ProviderChannelStatus | AiRuntimeStatus;
-  statusLabel: string;
-  details?: string;
-  lastCheckedAt?: string;
-}
-
-export interface AiBudgetMetrics {
+export interface OperationalBudgetSnapshot {
   inputTokens?: number;
   outputTokens?: number;
   toolCalls?: number;
@@ -136,14 +113,10 @@ export interface AiBudgetMetrics {
   limitTokens?: number;
 }
 
-export interface AiRuntimeMetadata {
-  runtimeEnabled: boolean;
-  configuredModel?: string;
-  lastExecutionAt?: string;
-  latencyMs?: number;
-  circuitState?: 'closed' | 'open' | 'half_open';
-  budget?: AiBudgetMetrics;
-}
+/**
+ * UI-only snapshot shape. This is not an API contract.
+ * Populate it only from a backend endpoint once one is published.
+ */
 
 export interface ConversationSummary {
   id: string;
