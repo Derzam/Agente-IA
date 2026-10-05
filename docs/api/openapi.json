@@ -6208,6 +6208,17 @@
               "system"
             ]
           },
+          "outbox_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "text": {
             "anyOf": [
               {
@@ -6236,17 +6247,6 @@
                 "type": "null"
               }
             ]
-          },
-          "outbox_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ]
           }
         },
         "required": [
@@ -6259,9 +6259,9 @@
           "direction",
           "kind",
           "actor_type",
+          "outbox_id",
           "text",
-          "delivery_status",
-          "outbox_id"
+          "delivery_status"
         ]
       },
       "HumanHandoff": {
