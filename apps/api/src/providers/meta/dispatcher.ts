@@ -7,7 +7,7 @@ import type {
   Repository,
   Row,
 } from "../../modules/domain/infrastructure/repository.js";
-import { audit } from "../../modules/domain/application/evidence.js";
+import { audit, outbox } from "../../modules/domain/application/evidence.js";
 export class MetaDispatcher {
   constructor(
     private pool: pg.Pool,
@@ -263,15 +263,18 @@ export async function reconcileStatus(
   if (o.provider_message_id && o.provider_message_id !== p.provider_message_id)
     return true;
   if (
+    status === m.delivery_status ||
     (status === "failed" &&
       ["delivered", "read"].includes(m.delivery_status)) ||
     (ranks[status] && (ranks[status] ?? 0) <= (ranks[m.delivery_status] ?? 0))
   )
     return true;
-  await r.db.query(
-    "UPDATE app.messages SET provider_message_id=$3,delivery_status=$4,provider_timestamp=$5 WHERE business_id=$1 AND id=$2",
-    [r.tenant, m.id, p.provider_message_id, status, p.provider_timestamp],
-  );
+  const changed = (
+    await r.db.query(
+      "UPDATE app.messages SET provider_message_id=$3,delivery_status=$4,provider_timestamp=$5 WHERE business_id=$1 AND id=$2 RETURNING *",
+      [r.tenant, m.id, p.provider_message_id, status, p.provider_timestamp],
+    )
+  ).rows[0];
   await r.db.query("SELECT set_config('app.meta_reconcile','verified',true)");
   await r.db.query(
     "UPDATE app.outbox_events SET status='sent',provider_message_id=$3,delivery_status=$4,provider_status_at=$5,accepted_at=coalesce(accepted_at,clock_timestamp()),lease_until=NULL,last_error_code=CASE WHEN $4='failed' THEN 'META_DELIVERY_FAILED' ELSE NULL END WHERE business_id=$1 AND id=$2",
@@ -283,8 +286,15 @@ export async function reconcileStatus(
     event.id,
     "message.delivery_status",
     "message",
-    { ...m, status },
+    { ...changed, status },
     { ...m, status: m.delivery_status },
+  );
+  await outbox(
+    r,
+    "message.delivery_updated",
+    changed,
+    event.id,
+    m.conversation_id,
   );
   return true;
 }

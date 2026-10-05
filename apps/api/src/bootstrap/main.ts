@@ -4,17 +4,14 @@ import { createPool, checkDatabaseRole } from "../platform/database.js";
 import { PostgresIdentityRepository } from "../modules/identity/infrastructure/postgres-identity.js";
 import { PostgresInboxRepository } from "../modules/inbox/infrastructure/postgres-inbox.js";
 import { buildApp } from "./app.js";
-import { loadRuntime } from "../config/runtime.js";
+import { loadApiRuntime } from "../config/runtime.js";
 import { configureCursorKey } from "../platform/cursor.js";
 import { ingressLimiter } from "../platform/ingress-limits.js";
 
 async function main() {
   const config = loadConfig(process.env);
-  const runtime = loadRuntime(process.env);
-  configureCursorKey(
-    runtime.cursorKey,
-    process.env.CURSOR_HMAC_PREVIOUS_KEY || undefined,
-  );
+  const runtime = loadApiRuntime(process.env);
+  configureCursorKey(runtime.cursorKey, runtime.cursorPreviousKey);
   const apiPool = createPool(config.databaseUrl);
   const ingressPool = createPool(config.webhookDatabaseUrl);
   const closePools = async () => {

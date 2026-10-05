@@ -35,6 +35,8 @@ Env solo `RUNTIME_ENV=local` o `staging`; staging exige SUPABASE_URL del ref aut
 
 Cada LOGIN principal debe ser miembro de exactamente app_api, app_ingress o app_worker; NO SUPERUSER/BYPASSRLS/CREATEDB/CREATEROLE, sin ownership ni grants directos extra. No crear passwords sin canal seguro de entrega. El runtime rechaza mismatches y privilegios peligrosos. La migración conserva roles capability NOLOGIN existentes.
 
+Secret sets separados: el proceso API recibe solo URLs API/ingress, secretos inbound Meta y cursor HMAC; el worker recibe solo su URL DB, OpenAI, token/configuración outbound Meta y keyring de confirmation. Nunca entregar WORKER_DATABASE_URL, OPENAI_API_KEY, META_ACCESS_TOKEN o CONFIRMATION_TRANSPORT_KEYS al proceso público API. Los loaders validan por proceso y la readiness conjunta exige ambos probes; no se relaja la validación de roles ni de features del worker.
+
 ## Prueba externa posterior autorizada
 
 OpenAI: habilitar feature en entorno staging y un negocio sintético con ai_enabled; observar IDs/metadatos/usage, tool loop y handoff con epoch. No asumir que un modelo cualquiera soporte strict tools/reasoning.encrypted_content: validar el modelo elegido con contrato actual y registrar la evidencia real, sin prompts crudos.

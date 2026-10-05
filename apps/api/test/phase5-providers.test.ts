@@ -8,7 +8,8 @@ import {
 import { CloudMetaProvider } from "../src/providers/meta/provider.js";
 import { ChallengeCipher } from "../src/providers/meta/challenge-cipher.js";
 import { CursorCodec } from "../src/platform/cursor.js";
-import { loadRuntime } from "../src/config/runtime.js";
+import { loadApiRuntime, loadRuntime } from "../src/config/runtime.js";
+import { loadConfig } from "../src/config/env.js";
 import {
   validateTool,
   toolRegistry,
@@ -351,8 +352,8 @@ test("runtime flags fail closed independently from business ai_enabled", () => {
     /META_ACCESS_TOKEN/,
   );
   assert.throws(
-    () => loadRuntime({ ...env, CURSOR_HMAC_KEY: "secret-invalid-value" }),
-    (e) => !String(e).includes("secret-invalid-value"),
+    () => loadApiRuntime({ CURSOR_HMAC_KEY: "secret-invalid-value" }),
+    (e) => /CURSOR_HMAC_KEY/.test(String(e)) && !String(e).includes("secret-invalid-value"),
   );
   assert.throws(() =>
     loadRuntime({
@@ -360,6 +361,70 @@ test("runtime flags fail closed independently from business ai_enabled", () => {
       WORKER_DATABASE_URL: "postgres://service_role@127.0.0.1/agente_ia_test",
     }),
   );
+});
+test("API bootstrap configuration works without worker or provider credentials", () => {
+  const env = {
+    NODE_ENV: "test",
+    DATABASE_URL: "postgres://api_test@127.0.0.1/agente_ia_test",
+    WEBHOOK_DATABASE_URL: "postgres://ingress_test@127.0.0.1/agente_ia_test",
+    SUPABASE_URL: "https://pqffgbpbreuhivxxctvr.supabase.co",
+    META_VERIFY_TOKEN: "synthetic-verify-only",
+    META_APP_SECRET: "synthetic-secret-only",
+    ADMIN_ALLOWED_ORIGINS: "http://localhost:5173",
+    CURSOR_HMAC_KEY: randomBytes(32).toString("hex"),
+    AI_RUNTIME_ENABLED: "true",
+    META_OUTBOUND_ENABLED: "true",
+    RUNTIME_ENV: "staging",
+  };
+  const api = loadConfig(env);
+  assert.equal(api.databaseUrl, env.DATABASE_URL);
+  assert.equal(api.webhookDatabaseUrl, env.WEBHOOK_DATABASE_URL);
+  const forbidden = /^(WORKER_DATABASE_URL|OPENAI_|CONFIRMATION_|META_ACCESS_TOKEN|META_PHONE_NUMBER_ID|META_SANDBOX_RECIPIENTS)/;
+  const isolated = new Proxy(env, {
+    get(target, property, receiver) {
+      assert.ok(!forbidden.test(String(property)), `API read worker field ${String(property)}`);
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  assert.deepEqual(loadApiRuntime(isolated), {
+    cursorKey: env.CURSOR_HMAC_KEY,
+    cursorPreviousKey: undefined,
+  });
+});
+test("worker validates enabled providers without API, ingress or cursor secrets", () => {
+  const env = {
+    WORKER_DATABASE_URL: "postgres://worker_test@127.0.0.1/agente_ia_test",
+    AI_RUNTIME_ENABLED: "true",
+    META_OUTBOUND_ENABLED: "true",
+    OPENAI_API_KEY: "synthetic-only",
+    OPENAI_MODEL: "synthetic-model",
+    META_ACCESS_TOKEN: "synthetic-only",
+    META_PHONE_NUMBER_ID: "123456789",
+    META_GRAPH_API_VERSION: "v999.0",
+    META_SANDBOX_RECIPIENTS: "12025550123",
+    CONFIRMATION_ACTIVE_KEY_VERSION: "v1",
+    CONFIRMATION_TRANSPORT_KEYS: JSON.stringify({ v1: randomBytes(32).toString("hex") }),
+  };
+  const isolated = new Proxy(env, {
+    get(target, property, receiver) {
+      assert.ok(!["DATABASE_URL", "WEBHOOK_DATABASE_URL", "CURSOR_HMAC_KEY", "CURSOR_HMAC_PREVIOUS_KEY", "META_APP_SECRET", "META_VERIFY_TOKEN"].includes(String(property)));
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  const cfg = loadRuntime(isolated);
+  assert.equal(cfg.aiEnabled, true);
+  assert.equal(cfg.metaEnabled, true);
+  assert.equal(cfg.workerUrl, env.WORKER_DATABASE_URL);
+  assert.throws(() => loadRuntime({ ...env, OPENAI_API_KEY: "" }), /OPENAI_API_KEY/);
+  assert.throws(() => loadRuntime({ ...env, META_ACCESS_TOKEN: "" }), /META_ACCESS_TOKEN/);
+});
+test("separate runtime loaders preserve cursor rotation and staging restrictions", () => {
+  assert.throws(() => loadApiRuntime({}), /CURSOR_HMAC_KEY/);
+  const cursor = { CURSOR_HMAC_KEY: randomBytes(32).toString("hex") };
+  assert.throws(() => loadApiRuntime({ ...cursor, CURSOR_HMAC_PREVIOUS_KEY: "invalid" }), /CURSOR_HMAC_PREVIOUS_KEY/);
+  for (const load of [loadApiRuntime, loadRuntime]) {
+    assert.throws(() => load({ ...cursor, WORKER_DATABASE_URL: "postgres://worker_test@127.0.0.1/agente_ia_test", RUNTIME_ENV: "staging", SUPABASE_URL: "https://unapproved.example" }), /SUPABASE_URL/);
+  }
 });
 test("AI tool schemas reject tenant, price, payment status and arbitrary order status", () => {
   for (const extra of [

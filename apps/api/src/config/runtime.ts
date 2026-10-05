@@ -1,8 +1,30 @@
 import { ConfigurationError } from "./env.js";
+export interface ApiRuntimeConfig {
+  cursorKey: string;
+  cursorPreviousKey?: string;
+}
+function validateRuntimeEnvironment(env: NodeJS.ProcessEnv, invalid: string[]) {
+  if (env.RUNTIME_ENV === "staging") {
+    if (env.SUPABASE_URL !== "https://pqffgbpbreuhivxxctvr.supabase.co")
+      invalid.push("SUPABASE_URL");
+  } else if (env.RUNTIME_ENV && env.RUNTIME_ENV !== "local")
+    invalid.push("RUNTIME_ENV");
+}
+// The public API must never require or read the worker's credentials.
+export function loadApiRuntime(env: NodeJS.ProcessEnv): ApiRuntimeConfig {
+  const invalid: string[] = [];
+  const cursorKey = env.CURSOR_HMAC_KEY || "",
+    cursorPreviousKey = env.CURSOR_HMAC_PREVIOUS_KEY || undefined;
+  if (!/^[a-f0-9]{64}$/i.test(cursorKey)) invalid.push("CURSOR_HMAC_KEY");
+  if (cursorPreviousKey && !/^[a-f0-9]{64}$/i.test(cursorPreviousKey))
+    invalid.push("CURSOR_HMAC_PREVIOUS_KEY");
+  validateRuntimeEnvironment(env, invalid);
+  if (invalid.length) throw new ConfigurationError(invalid);
+  return { cursorKey, cursorPreviousKey };
+}
 export interface RuntimeConfig {
   aiEnabled: boolean;
   metaEnabled: boolean;
-  cursorKey: string;
   workerUrl: string;
   openai: {
     apiKey: string;
@@ -44,15 +66,9 @@ export function loadRuntime(env: NodeJS.ProcessEnv): RuntimeConfig {
     if (!Number.isSafeInteger(v) || v < lo || v > hi) invalid.push(k);
     return v;
   };
-  const key = (k: string) => {
-    const v = env[k] || "";
-    if (!/^[a-f0-9]{64}$/i.test(v)) invalid.push(k);
-    return v;
-  };
   const aiEnabled = flag("AI_RUNTIME_ENABLED"),
     metaEnabled = flag("META_OUTBOUND_ENABLED");
-  const cursorKey = key("CURSOR_HMAC_KEY"),
-    workerUrl = env.WORKER_DATABASE_URL || "";
+  const workerUrl = env.WORKER_DATABASE_URL || "";
   try {
     const u = new URL(workerUrl);
     if (
@@ -97,8 +113,6 @@ export function loadRuntime(env: NodeJS.ProcessEnv): RuntimeConfig {
       meta.recipients.some((v) => !/^\d{7,15}$/.test(v))
     )
       invalid.push("META_SANDBOX_RECIPIENTS");
-    for (const k of ["META_APP_SECRET", "META_VERIFY_TOKEN"])
-      if ((env[k] || "").length < 16) invalid.push(k);
   }
   const challenge = {
     active: env.CONFIRMATION_ACTIVE_KEY_VERSION || "",
@@ -131,11 +145,7 @@ export function loadRuntime(env: NodeJS.ProcessEnv): RuntimeConfig {
       );
     }
   }
-  if (env.RUNTIME_ENV === "staging") {
-    if (env.SUPABASE_URL !== "https://pqffgbpbreuhivxxctvr.supabase.co")
-      invalid.push("SUPABASE_URL");
-  } else if (env.RUNTIME_ENV && env.RUNTIME_ENV !== "local")
-    invalid.push("RUNTIME_ENV");
+  validateRuntimeEnvironment(env, invalid);
   const caps = (scope: string, d: number) => ({
     input: num(`AI_${scope}_INPUT_TOKENS`, d * 100000),
     output: num(`AI_${scope}_OUTPUT_TOKENS`, d * 2000),
@@ -151,7 +161,6 @@ export function loadRuntime(env: NodeJS.ProcessEnv): RuntimeConfig {
   return {
     aiEnabled,
     metaEnabled,
-    cursorKey,
     workerUrl,
     openai,
     meta,

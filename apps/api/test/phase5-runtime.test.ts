@@ -196,7 +196,6 @@ async function fixture() {
   };
   const config = loadRuntime({
     WORKER_DATABASE_URL: `postgres://worker_runtime_test@127.0.0.1:5432/agente_ia_runtime_test`,
-    CURSOR_HMAC_KEY: randomBytes(32).toString("hex"),
   });
   config.aiEnabled = true;
   config.openai.model = "synthetic-model";
@@ -312,7 +311,7 @@ test("signed HTTP inbound completes inbox, AI, deterministic tools, Meta accepta
       await checkDatabaseRole(ingress, "ingress");
     },
     logger: false,
-    ingressLimit: ingressLimiter(ingress, f.config.cursorKey),
+    ingressLimit: ingressLimiter(ingress, randomBytes(32).toString("hex")),
   });
   try {
     const post = async (value: object) => {
@@ -392,6 +391,7 @@ test("signed HTTP inbound completes inbox, AI, deterministic tools, Meta accepta
       "delivered",
     );
     assert.equal((await app.inject({ url: "/ready" })).statusCode, 200);
+    assert.equal((await admin.query("SELECT count(*)::int n FROM app.outbox_events WHERE business_id=$1 AND event_type='message.delivery_updated'", [f.tenant])).rows[0].n, 1);
     assert.ok(!JSON.stringify(events).includes(f.recipient));
     assert.ok(!JSON.stringify(events).includes("USD 5.00"));
   } finally {
@@ -803,6 +803,59 @@ test("Meta acceptance persists provider id and monotonic duplicated/out-of-order
     ).rows[0].delivery_status,
     "read",
   );
+});
+for (const status of ["sent", "delivered", "read", "failed"] as const)
+  test(`Meta ${status} callback emits a versioned domain event once through inbox processing`, async () => {
+    const f = await quoteFixture();
+    await admin.query("UPDATE app.outbox_events SET status='unknown',transport_started_at=now() WHERE id=$1", [f.outbox.id]);
+    await admin.query("UPDATE app.messages SET delivery_status='unknown' WHERE outbox_id=$1", [f.outbox.id]);
+    const repo = new PostgresInboxRepository(ingress),
+      core = new InternalWorker(worker, 5, 30, () => {}, { status: reconcileStatus });
+    const timestamp = Math.floor(Date.now() / 1000);
+    const callback = (at: number) => normalizeEnvelope({
+      object: "whatsapp_business_account",
+      entry: [{ id: "synthetic", changes: [{ field: "messages", value: {
+        metadata: { phone_number_id: f.phone },
+        statuses: [{ id: "wamid.event." + f.outbox.id, status, timestamp: String(at), recipient_id: f.recipient, biz_opaque_callback_data: f.outbox.id }],
+      } }] }],
+    }).events;
+    const first = callback(timestamp);
+    assert.equal((await repo.ingest(first)).inserted, 1);
+    assert.equal((await repo.ingest(first)).duplicates, 1);
+    const lease = (await core.claim(f.tenant, "inbox"))!;
+    assert.ok(await core.process(lease));
+    assert.equal(await core.process(lease), false);
+    const message = (await admin.query("SELECT * FROM app.messages WHERE outbox_id=$1", [f.outbox.id])).rows[0];
+    const evidence = async () => (await admin.query("SELECT * FROM app.outbox_events WHERE business_id=$1 AND event_type='message.delivery_updated'", [f.tenant])).rows;
+    const events = await evidence();
+    assert.equal(events.length, 1);
+    assert.equal(message.delivery_status, status);
+    assert.equal(events[0].conversation_id, f.ctx.conversation);
+    assert.equal(events[0].aggregate_id, message.id);
+    assert.equal(events[0].aggregate_version, message.version);
+    assert.equal(events[0].causation_id, lease.id);
+    assert.deepEqual(events[0].payload, { resource_id: message.id, resource_version: message.version });
+    // A duplicate state with a different timestamp is a distinct inbox event.
+    assert.equal((await repo.ingest(callback(timestamp + 1))).inserted, 1);
+    assert.ok(await core.process((await core.claim(f.tenant, "inbox"))!));
+    assert.equal((await evidence()).length, 1);
+    assert.equal((await admin.query("SELECT version FROM app.messages WHERE id=$1", [message.id])).rows[0].version, message.version);
+    assert.equal((await admin.query("SELECT count(*)::int n FROM app.audit_logs WHERE business_id=$1 AND action='message.delivery_status'", [f.tenant])).rows[0].n, 1);
+  });
+test("Meta message, transport and delivery event reconciliation roll back together", async () => {
+  const f = await quoteFixture();
+  await admin.query("UPDATE app.outbox_events SET status='unknown',transport_started_at=now() WHERE id=$1", [f.outbox.id]);
+  const before = (await admin.query("SELECT * FROM app.messages WHERE outbox_id=$1", [f.outbox.id])).rows[0];
+  await assert.rejects(() => scoped(worker, f.tenant, async (r) => {
+    await reconcileStatus(r, { id: randomUUID(), channel_id: f.channel, payload: {
+      provider_message_id: "wamid.rollback", provider_timestamp: new Date().toISOString(), content: { status: "read", callback: f.outbox.id },
+    } });
+    throw Error("controlled rollback");
+  }), /controlled rollback/);
+  assert.deepEqual((await admin.query("SELECT * FROM app.messages WHERE id=$1", [before.id])).rows[0], before);
+  assert.equal((await admin.query("SELECT status FROM app.outbox_events WHERE id=$1", [f.outbox.id])).rows[0].status, "unknown");
+  assert.equal((await admin.query("SELECT count(*)::int n FROM app.outbox_events WHERE business_id=$1 AND event_type='message.delivery_updated'", [f.tenant])).rows[0].n, 0);
+  assert.equal((await admin.query("SELECT count(*)::int n FROM app.audit_logs WHERE business_id=$1 AND action='message.delivery_status'", [f.tenant])).rows[0].n, 0);
 });
 test("ambiguous Meta timeout stays unknown and signed callback reconciles without resend", async () => {
   const f = await quoteFixture();
