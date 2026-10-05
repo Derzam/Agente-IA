@@ -23,6 +23,7 @@ import { usePolling } from '@/hooks/usePolling';
 import { VersionConflictError, NetworkError, NormalizedApiError } from '@/api/types';
 import { newIdempotencyKey, USE_MOCK_DATA } from '@/services/apiClient';
 import { NavItemKey } from '@/components/layout/Sidebar';
+import { reconcileConversationMessages } from './messageReconciliation';
 
 const CANONICAL_REASONS: { id: HandoffReason; label: string }[] = [
   { id: 'explicit_request', label: 'Solicitud explícita del cliente' },
@@ -98,23 +99,13 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
       const msgs = await conversationService.getMessages(convId, { signal });
       if (signal?.aborted || selectedConvIdRef.current !== convId) return;
       setMessages((prev) => {
-        // Reconcile and deduplicate by message ID
-        const incomingMap = new Map(msgs.map((m) => [m.id, m]));
-        const merged: ChatMessage[] = [];
-        for (const m of msgs) {
-          merged.push(m);
-        }
-        // Retain optimistic / queued receipts not yet confirmed in DB
-        for (const p of prev) {
-          if (!incomingMap.has(p.id) && p.deliveryStatus === 'queued') {
-            merged.push(p);
-          }
-        }
+        const merged = reconcileConversationMessages(prev, msgs, convId);
         if (
           prev.length === merged.length &&
           prev.every(
             (p, i) =>
               p.id === merged[i].id &&
+              p.outboxId === merged[i].outboxId &&
               p.deliveryStatus === merged[i].deliveryStatus &&
               p.failureCode === merged[i].failureCode &&
               p.content === merged[i].content
@@ -175,6 +166,8 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
   const handleSelectConversation = (convId: string) => {
     selectedConvIdRef.current = convId;
     setSelectedConvId(convId);
+    setMessages([]);
+    setActiveOrder(null);
     isNearBottomRef.current = true;
     loadMessages(convId);
   };
