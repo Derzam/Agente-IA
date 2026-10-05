@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardHeader, CardBody } from '@/components/common/Card';
-import { ProviderStatusBadge, UnifiedProviderStatus } from './ProviderStatusBadge';
+import { ProviderStatusBadge, LocalProviderBadgeStatus } from './ProviderStatusBadge';
 
 interface OperationalMetric {
   label: string;
@@ -10,7 +10,7 @@ interface OperationalMetric {
 interface ProviderStatusCardProps {
   title: string;
   subtitle: string;
-  status: UnifiedProviderStatus;
+  status: LocalProviderBadgeStatus;
   metrics?: OperationalMetric[];
   notice?: string;
   className?: string;
