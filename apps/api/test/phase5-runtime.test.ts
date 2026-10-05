@@ -1119,6 +1119,21 @@ test("feature flags disabled invoke neither provider and paused conversations cr
   }).run(f.tenant, f.inbound);
   assert.equal(calls, 0);
   f.config.aiEnabled = true;
+  await admin.query(
+    "UPDATE app.business_settings SET ai_enabled=false WHERE business_id=$1",
+    [f.tenant],
+  );
+  await harness(f, {
+    respond: async () => {
+      calls++;
+      return reply();
+    },
+  }).run(f.tenant, f.inbound);
+  assert.equal(calls, 0);
+  await admin.query(
+    "UPDATE app.business_settings SET ai_enabled=true WHERE business_id=$1",
+    [f.tenant],
+  );
   await base.requestHuman(f.ctx, randomUUID(), "explicit_request");
   await harness(f, {
     respond: async () => {
@@ -1207,7 +1222,14 @@ test("webhook limits share durable HMAC windows and store no IP", async () => {
     ).rows.some((r) => r.key_hash.includes("198.51")),
   );
 });
-for (const issue of ["handoff", "expired", "wrong_key"] as const)
+for (const issue of [
+  "handoff",
+  "expired",
+  "wrong_key",
+  "window_expired",
+  "window_missing",
+  "window_future",
+] as const)
   test("Meta preflight rejects " + issue + " before sending", async () => {
     const f = await quoteFixture();
     if (issue === "handoff")
@@ -1216,6 +1238,19 @@ for (const issue of ["handoff", "expired", "wrong_key"] as const)
       await admin.query(
         "UPDATE app.confirmation_challenges SET expires_at=now()-interval '1 second' WHERE id=$1",
         [f.challenge.id],
+      );
+    if (issue.startsWith("window_"))
+      await admin.query(
+        "UPDATE app.conversations SET last_customer_message_at=$2 WHERE id=$1",
+        [
+          f.ctx.conversation,
+          issue === "window_missing"
+            ? null
+            : new Date(
+                Date.now() +
+                  (issue === "window_expired" ? -25 * 3600000 : 3600000),
+              ),
+        ],
       );
     let calls = 0;
     await new MetaDispatcher(
@@ -1241,6 +1276,16 @@ for (const issue of ["handoff", "expired", "wrong_key"] as const)
       ).rows[0].status,
       "dead_letter",
     );
+    if (issue.startsWith("window_"))
+      assert.equal(
+        (
+          await admin.query(
+            "SELECT last_error_code FROM app.outbox_events WHERE id=$1",
+            [f.outbox.id],
+          )
+        ).rows[0].last_error_code,
+        "META_WINDOW_CLOSED",
+      );
   });
 test("unknown, malformed and foreign-channel status cannot corrupt known messages", async () => {
   const f = await quoteFixture();
@@ -1497,4 +1542,30 @@ test("copied confirmation payload in text or button title is redacted before dur
     ).rows[0].consumed_at,
     null,
   );
+});
+
+test("canonical Message projection correlates a Phase 5 outbound through the typed outbox_id contract", async () => {
+  const f = await fixture();
+  await harness(f, { respond: async () => reply() }).run(f.tenant, f.inbound);
+  const m = (
+    await admin.query(
+      "SELECT * FROM app.messages WHERE business_id=$1 AND direction='outbound'",
+      [f.tenant],
+    )
+  ).rows[0];
+  const dto = await scoped(worker, f.tenant, (r) => r.dto("Message", m));
+  assert.equal(dto.outbox_id, m.outbox_id);
+  assert.equal(
+    (
+      await admin.query(
+        "SELECT conversation_id FROM app.outbox_events WHERE id=$1",
+        [dto.outbox_id],
+      )
+    ).rows[0].conversation_id,
+    dto.conversation_id,
+  );
+  const inbound = await scoped(worker, f.tenant, async (r) =>
+    r.dto("Message", await r.one("messages", f.inbound)),
+  );
+  assert.equal(inbound.outbox_id, null);
 });

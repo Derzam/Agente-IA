@@ -79,6 +79,17 @@ export interface Order {
 export type MessageSender = 'customer' | 'bot' | 'staff' | 'system';
 export type MessageContentType = 'text' | 'image' | 'location' | 'order_summary' | 'internal_note';
 
+export type DeliveryStatus =
+  | 'queued'
+  | 'pending'
+  | 'sending'
+  | 'sent'
+  | 'delivered'
+  | 'read'
+  | 'failed'
+  | 'unknown'
+  | 'dead_letter';
+
 export interface ChatMessage {
   id: string;
   conversationId: string;
@@ -89,8 +100,27 @@ export interface ChatMessage {
   timestamp: string;
   isInternalNote?: boolean;
   orderReferenceId?: string;
-  deliveryStatus?: 'queued' | 'pending' | 'sent' | 'delivered' | 'read' | 'failed' | 'unknown' | null;
+  outboxId?: string | null;
+  anchorMessageId?: string | null;
+  createdAtMs?: number;
+  requestSequence?: number;
+  deliveryStatus?: DeliveryStatus | null;
+  failureCode?: string | null;
 }
+
+export interface OperationalBudgetSnapshot {
+  inputTokens?: number;
+  outputTokens?: number;
+  toolCalls?: number;
+  turns?: number;
+  remainingQuota?: number;
+  limitTokens?: number;
+}
+
+/**
+ * UI-only snapshot shape. This is not an API contract.
+ * Populate it only from a backend endpoint once one is published.
+ */
 
 export interface ConversationSummary {
   id: string;

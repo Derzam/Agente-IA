@@ -11,10 +11,58 @@ import type {
 } from '@/types/viewModels';
 
 /**
+ * Sanitizes failure code to ensure no raw dumps, tokens, phone numbers, or stacks leak to UI.
+ */
+export function sanitizeFailureCode(code: unknown): string | null {
+  if (typeof code === 'number') {
+    return String(code);
+  }
+  if (typeof code !== 'string') {
+    return null;
+  }
+  const trimmed = code.trim();
+  if (!trimmed || trimmed.length > 64) {
+    return null;
+  }
+  // Reject tokens, dumps, stacks, URLs, SQL, or JSON-like payloads
+  const forbiddenPatterns = [
+    /bearer/i,
+    /token/i,
+    /secret/i,
+    /at\s+[\w.]+\s+\(/i,
+    /dump/i,
+    /https?:/i,
+    /[{}[\]"'\\]/,
+  ];
+  if (forbiddenPatterns.some((pattern) => pattern.test(trimmed))) {
+    return null;
+  }
+  // Safe alphanumeric / underscores / hyphens / dots
+  if (/^[a-zA-Z0-9_.-]+$/.test(trimmed)) {
+    return trimmed;
+  }
+  return null;
+}
+
+const KNOWN_DELIVERY_STATUSES = new Set([
+  'queued',
+  'pending',
+  'sending',
+  'sent',
+  'delivered',
+  'read',
+  'failed',
+  'unknown',
+  'dead_letter',
+]);
+
+/**
  * Maps DTO Message to ViewModel ChatMessage.
  * Safe rendering: content is plain text, never raw HTML.
  */
-export function mapDtoMessageToViewModel(dto: DTOMessage): ViewModelChatMessage {
+export function mapDtoMessageToViewModel(
+  dto: DTOMessage & { failure_code?: string | null; outbox_status?: string | null }
+): ViewModelChatMessage {
   let sender: MessageSender = 'bot';
   if (dto.actor_type === 'customer') sender = 'customer';
   else if (dto.actor_type === 'human') sender = 'staff';
@@ -22,6 +70,16 @@ export function mapDtoMessageToViewModel(dto: DTOMessage): ViewModelChatMessage 
 
   let type: MessageContentType = 'text';
   if (dto.kind === 'location') type = 'location';
+
+  const rawStatus = dto.delivery_status || dto.outbox_status || null;
+  const deliveryStatus =
+    rawStatus && KNOWN_DELIVERY_STATUSES.has(rawStatus)
+      ? (rawStatus as ViewModelChatMessage['deliveryStatus'])
+      : rawStatus
+      ? 'unknown'
+      : null;
+
+  const failureCode = sanitizeFailureCode((dto as any).failure_code);
 
   return {
     id: dto.id,
@@ -39,7 +97,10 @@ export function mapDtoMessageToViewModel(dto: DTOMessage): ViewModelChatMessage 
     content: dto.text || (dto.kind === 'location' ? '📍 Ubicación compartida' : ''),
     timestamp: dto.created_at,
     isInternalNote: false,
-    deliveryStatus: dto.delivery_status,
+    outboxId: dto.outbox_id ?? null,
+    anchorMessageId: null,
+    deliveryStatus,
+    failureCode,
   };
 }
 

@@ -8,6 +8,7 @@ import {
   ErrorCode,
   VERSION_CONFLICT_MESSAGE,
 } from './types';
+import { parseRetryAfter } from './retryAfter';
 
 export interface ApiClientConfig {
   baseUrl?: string;
@@ -219,16 +220,9 @@ export class ApiClient {
     }
 
     // 429 Rate Limited
-    let retryAfterSeconds: number | undefined;
+    const retryAfterSeconds = parseRetryAfter(headers.get('Retry-After'));
     if (status === 429) {
-      code = 'RATE_LIMITED';
-      const retryHeader = headers.get('Retry-After');
-      if (retryHeader) {
-        const parsed = parseInt(retryHeader, 10);
-        if (!isNaN(parsed)) {
-          retryAfterSeconds = parsed;
-        }
-      }
+      code = (errorPayload?.code as ErrorCode) || 'RATE_LIMITED';
       message = retryAfterSeconds
         ? `Límite de solicitudes alcanzado. Por favor espera ${retryAfterSeconds} segundos.`
         : 'Límite de solicitudes alcanzado. Por favor intenta más tarde.';
@@ -236,25 +230,25 @@ export class ApiClient {
 
     // 403 Forbidden
     if (status === 403) {
-      code = 'FORBIDDEN';
-      message = message || 'No tienes permisos suficientes para realizar esta acción.';
+      code = (errorPayload?.code as ErrorCode) || 'FORBIDDEN';
+      message = errorPayload?.message || message || 'No tienes permisos suficientes para realizar esta acción.';
     }
 
     // 404 Not Found
     if (status === 404) {
-      code = 'NOT_FOUND';
-      message = message || 'El recurso solicitado no existe o no está disponible.';
+      code = (errorPayload?.code as ErrorCode) || 'NOT_FOUND';
+      message = errorPayload?.message || message || 'El recurso solicitado no existe o no está disponible.';
     }
 
     // 422 Validation Error
     if (status === 422) {
-      code = 'VALIDATION_ERROR';
+      code = (errorPayload?.code as ErrorCode) || 'VALIDATION_ERROR';
     }
 
-    // 503 Provider Unavailable
+    // 503 Provider Unavailable (preserve backend-specific code if present)
     if (status === 503) {
-      code = 'PROVIDER_UNAVAILABLE';
-      message = message || 'El servicio o dependencia no está disponible temporalmente.';
+      code = (errorPayload?.code as ErrorCode) || 'PROVIDER_UNAVAILABLE';
+      message = errorPayload?.message || message || 'El servicio o dependencia no está disponible temporalmente.';
     }
 
     throw new NormalizedApiError({

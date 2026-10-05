@@ -2,6 +2,8 @@
 
 Fecha: 2026-10-04. Rama `codex/phase-05-staging-runtime-ai-meta`, Draft [PR #16](https://github.com/Derzam/Agente-IA/pull/16), base main `6915aa6cb45d85565856a38dd1f297235f4c26a2`. No merge. [Arquitectura](implementation.md) y [blockers de activación](activation-and-security.md).
 
+Esta es la evidencia histórica de aplicación/validación inicial. Para la integración posterior de PR #17 y los nuevos conteos/checks, consultar [main-reconciliation.md](main-reconciliation.md).
+
 ## Validación local
 
 Node 24.14.0, npm 11.9.0, PostgreSQL 17.11 temporal sobre loopback. `npm ci`, typecheck de todos los workspaces, build API, build Admin y **67 tests Admin** pasan. Backend **332/332**, sin fallos/skips: 263 históricos + 25 contratos/providers + 44 pruebas runtime PostgreSQL de Fase 5. Total **399 tests**, mantiene los 330 anteriores y añade 69. No cambios al panel ni eliminación de tests históricos.

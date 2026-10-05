@@ -1,5 +1,5 @@
-import React from 'react';
-import { AlertCircle, RefreshCw, WifiOff, ShieldAlert } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { AlertCircle, RefreshCw, WifiOff, ShieldAlert, ServerCrash, Gauge, ZapOff, Clock } from 'lucide-react';
 import { NormalizedApiError, NetworkError, TimeoutError, AuthError } from '@/api/types';
 import { Button } from './Button';
 
@@ -10,39 +10,64 @@ interface ApiErrorBannerProps {
 }
 
 export const ApiErrorBanner: React.FC<ApiErrorBannerProps> = ({ error, onRetry, className = '' }) => {
-  if (!error) return null;
-
   let title = 'Ocurrió un error';
   let message = 'No se pudo completar la solicitud.';
   let requestId: string | undefined;
-  let icon = <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />;
+  let code: string | undefined;
+  let retryAfterSec: number | undefined;
+  let icon = <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" aria-hidden="true" />;
+  let bannerColor = 'bg-rose-50 border-rose-200 text-rose-900';
 
   if (error instanceof NetworkError) {
     title = 'Sin conexión de red';
     message = 'Verifica tu conexión a internet o el estado del servidor.';
-    icon = <WifiOff className="w-5 h-5 text-amber-600 shrink-0" />;
+    icon = <WifiOff className="w-5 h-5 text-amber-600 shrink-0" aria-hidden="true" />;
+    bannerColor = 'bg-amber-50 border-amber-200 text-amber-900';
   } else if (error instanceof TimeoutError) {
     title = 'Tiempo de espera agotado';
     message = error.message;
+    bannerColor = 'bg-amber-50 border-amber-200 text-amber-900';
   } else if (error instanceof AuthError) {
     title = 'Sesión no autorizada';
     message = error.message;
-    icon = <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0" />;
+    icon = <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0" aria-hidden="true" />;
   } else if (error instanceof NormalizedApiError) {
     requestId = error.requestId;
+    code = error.code;
+    retryAfterSec = error.retryAfterSeconds;
+
     if (error.status === 403) {
       title = 'Permisos insuficientes';
       message = 'No tienes permisos para realizar esta operación en este negocio.';
-      icon = <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0" />;
+      icon = <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0" aria-hidden="true" />;
     } else if (error.status === 404) {
       title = 'Recurso no encontrado';
       message = 'El registro solicitado no existe o no está accesible.';
     } else if (error.status === 429) {
-      title = 'Límite de solicitudes superado';
+      title = 'Límite de solicitudes alcanzado';
       message = error.message;
-    } else if (error.status === 503) {
-      title = 'Servicio no disponible';
-      message = 'El servicio o sus dependencias están temporalmente fuera de línea.';
+      icon = <Gauge className="w-5 h-5 text-orange-600 shrink-0" aria-hidden="true" />;
+      bannerColor = 'bg-orange-50 border-orange-200 text-orange-950';
+    } else if ((error.code as string) === 'CIRCUIT_OPEN') {
+      title = 'Servicio de IA temporalmente suspendido';
+      message = error.message || 'El circuito de protección del proveedor está abierto. No se realizarán reintentos continuos.';
+      icon = <ZapOff className="w-5 h-5 text-purple-600 shrink-0" aria-hidden="true" />;
+      bannerColor = 'bg-purple-50 border-purple-300 text-purple-950';
+    } else if ((error.code as string) === 'AI_BUDGET_EXCEEDED' || (error.code as string) === 'BUDGET_EXCEEDED') {
+      title = 'Presupuesto de automatización agotado';
+      message = error.message || 'Se alcanzó el límite configurado de automatización para esta conversación o negocio.';
+      icon = <Gauge className="w-5 h-5 text-amber-600 shrink-0" aria-hidden="true" />;
+      bannerColor = 'bg-amber-50 border-amber-300 text-amber-950';
+    } else if (error.code === 'WINDOW_CLOSED') {
+      title = 'Ventana de WhatsApp cerrada (24h)';
+      message = error.message || 'Han transcurrido más de 24 horas desde el último mensaje del cliente. La política de WhatsApp restringe el envío libre de mensajes.';
+      icon = <Clock className="w-5 h-5 text-amber-600 shrink-0" aria-hidden="true" />;
+      bannerColor = 'bg-amber-50 border-amber-300 text-amber-950';
+    } else if (error.status === 503 || error.code === 'PROVIDER_UNAVAILABLE') {
+      title = 'Proveedor temporalmente no disponible';
+      message = error.message || 'El servicio o sus dependencias están temporalmente fuera de línea. Tu sesión sigue activa.';
+      icon = <ServerCrash className="w-5 h-5 text-amber-600 shrink-0" aria-hidden="true" />;
+      bannerColor = 'bg-amber-50 border-amber-300 text-amber-950';
     } else {
       message = error.message;
     }
@@ -50,32 +75,62 @@ export const ApiErrorBanner: React.FC<ApiErrorBannerProps> = ({ error, onRetry, 
     message = error.message;
   }
 
+  // Every new error establishes its own deadline, even with the same delay.
+  const [countdown, setCountdown] = useState<number>(retryAfterSec ?? 0);
+  useEffect(() => {
+    const deadline = Date.now() + (retryAfterSec ?? 0) * 1000;
+    const update = () => setCountdown(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
+    update();
+    if (!retryAfterSec) return;
+    const interval = setInterval(() => {
+      update();
+      if (Date.now() >= deadline) clearInterval(interval);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [error, retryAfterSec]);
+
+  // Hooks run in the same order across null -> error -> null transitions.
+  if (!error) return null;
+
   return (
     <div
       role="alert"
-      className={`p-4 bg-rose-50 border border-rose-200 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-rose-900 ${className}`}
+      className={`p-4 border rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${bannerColor} ${className}`}
     >
       <div className="flex items-start gap-3">
         {icon}
         <div>
-          <p className="text-xs sm:text-sm font-semibold">{title}</p>
-          <p className="text-xs text-rose-700 mt-0.5">{message}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs sm:text-sm font-semibold">{title}</p>
+            {code && (
+              <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-white/70 border border-current opacity-75">
+                {code}
+              </span>
+            )}
+          </div>
+          <p className="text-xs opacity-90 mt-0.5">{message}</p>
+          {countdown > 0 && (
+            <p className="text-[11px] font-mono mt-1 opacity-80">
+              Espera requerida: {countdown}s para reintentar
+            </p>
+          )}
           {requestId && (
-            <p className="text-[10px] text-rose-500 font-mono mt-1">
+            <p className="text-[10px] font-mono mt-1 opacity-70">
               ID de soporte: {requestId}
             </p>
           )}
         </div>
       </div>
-      {onRetry && (
+      {onRetry && !['AI_BUDGET_EXCEEDED', 'BUDGET_EXCEEDED', 'CIRCUIT_OPEN', 'WINDOW_CLOSED'].includes(code ?? '') && (
         <Button
           variant="outline"
           size="sm"
+          disabled={countdown > 0}
           onClick={onRetry}
           leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
-          className="shrink-0 bg-white border-rose-300 text-rose-800 hover:bg-rose-100"
+          className="shrink-0 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-400"
         >
-          Reintentar
+          {countdown > 0 ? `Espera ${countdown}s` : 'Reintentar'}
         </Button>
       )}
     </div>

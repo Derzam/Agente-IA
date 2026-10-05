@@ -62,21 +62,18 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
   const loadOrders = useCallback(async (signal?: AbortSignal) => {
     try {
       const data = await orderService.getOrders(undefined, { signal });
+      if (signal?.aborted) return;
       setOrders(data);
       setActionError(null);
     } catch (err: any) {
       if (err.name !== 'AbortError') {
         setActionError(err);
       }
+      if (signal) throw err;
     } finally {
       setIsLoading(false);
     }
   }, []);
-
-  useEffect(() => {
-    setIsLoading(true);
-    loadOrders();
-  }, [loadOrders]);
 
   // Polling: every 8s while view is visible, paused on blur / 429
   usePolling({

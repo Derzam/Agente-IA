@@ -8,6 +8,7 @@ import {
   mapDtoMessageToViewModel,
 } from '@/adapters/conversationAdapter';
 import type { RequestOptions } from '@/api/types';
+import { sortMessagesChronological, nextClientRequestSequence } from '@/features/conversations/messageReconciliation';
 
 let localConversations: ConversationSummary[] = [...mockConversations];
 let localMessages: Record<string, ChatMessage[]> = { ...mockMessagesByConversation };
@@ -56,11 +57,11 @@ export const conversationService = {
 
   async getMessages(conversationId: string, options?: RequestOptions): Promise<ChatMessage[]> {
     if (USE_MOCK_DATA) {
-      return Promise.resolve([...(localMessages[conversationId] || [])]);
+      return Promise.resolve(sortMessagesChronological([...(localMessages[conversationId] || [])]));
     }
 
     const dtoList = await endpoints.getMessages(conversationId, undefined, undefined, options);
-    return dtoList.map(mapDtoMessageToViewModel);
+    return sortMessagesChronological(dtoList.map(mapDtoMessageToViewModel));
   },
 
   async sendMessage(
@@ -69,20 +70,25 @@ export const conversationService = {
     expectedConversationVersion = 1,
     isInternalNote = false,
     idempotencyKey?: string,
-    options?: RequestOptions
+    options?: RequestOptions,
+    anchorMessageId?: string | null
   ): Promise<ChatMessage> {
     const key = idempotencyKey || newIdempotencyKey();
 
     if (USE_MOCK_DATA) {
+      const now = Date.now();
       const newMsg: ChatMessage = {
-        id: `msg-${Date.now()}`,
+        id: `msg-${now}`,
         conversationId,
         sender: 'staff',
         senderName: isInternalNote ? 'Nota de Staff' : 'Operador en Turno',
         type: isInternalNote ? 'internal_note' : 'text',
         content: text,
-        timestamp: new Date().toISOString(),
+        timestamp: new Date(now).toISOString(),
         isInternalNote,
+        anchorMessageId: anchorMessageId ?? null,
+        createdAtMs: now,
+        requestSequence: nextClientRequestSequence(),
       };
 
       if (!localMessages[conversationId]) {
@@ -118,16 +124,21 @@ export const conversationService = {
       options
     );
 
+    const now = Date.now();
     // Return message receipt with status 'queued' (202 Accepted)
     return {
-      id: receipt?.outbox_id || `msg-${Date.now()}`,
+      id: receipt?.outbox_id || `msg-${now}`,
       conversationId,
       sender: 'staff',
       senderName: 'Operador',
       type: 'text',
       content: text,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date(now).toISOString(),
       isInternalNote: false,
+      outboxId: receipt?.outbox_id || null,
+      anchorMessageId: anchorMessageId ?? null,
+      createdAtMs: now,
+      requestSequence: nextClientRequestSequence(),
       deliveryStatus: receipt?.status || 'queued',
     };
   },

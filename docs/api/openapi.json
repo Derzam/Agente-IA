@@ -6208,6 +6208,17 @@
               "system"
             ]
           },
+          "outbox_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "text": {
             "anyOf": [
               {
@@ -6248,6 +6259,7 @@
           "direction",
           "kind",
           "actor_type",
+          "outbox_id",
           "text",
           "delivery_status"
         ]

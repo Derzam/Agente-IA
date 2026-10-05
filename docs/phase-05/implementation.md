@@ -1,6 +1,6 @@
 # Fase 5: runtime controlado de staging
 
-Rama `codex/phase-05-staging-runtime-ai-meta`, Draft [PR #16](https://github.com/Derzam/Agente-IA/pull/16), base main `6915aa6cb45d85565856a38dd1f297235f4c26a2`. Implementación local con proveedores simulados. La activación externa requiere resolver los [blockers](activation-and-security.md). No hay merge ni hosting autorizado. Supabase permitido: exclusivamente `agente-ia-staging`, `pqffgbpbreuhivxxctvr`.
+Rama `codex/phase-05-staging-runtime-ai-meta`, [PR #16](https://github.com/Derzam/Agente-IA/pull/16), base original main `6915aa6cb45d85565856a38dd1f297235f4c26a2`. [Integración posterior con main/PR #17](main-reconciliation.md). Implementación local con proveedores simulados. La activación externa requiere resolver los [blockers](activation-and-security.md). PR #16 sin fusionar; hosting no autorizado. Supabase permitido: exclusivamente `agente-ia-staging`, `pqffgbpbreuhivxxctvr`.
 
 ## Arquitectura
 
