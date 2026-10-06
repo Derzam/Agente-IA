@@ -1660,6 +1660,8 @@ for (const issue of [
   "window_expired",
   "window_missing",
   "window_future",
+  "cart_changed",
+  "cart_expired",
 ] as const)
   test("Meta preflight rejects " + issue + " before sending", async () => {
     const f = await quoteFixture();
@@ -1680,8 +1682,20 @@ for (const issue of [
             : new Date(
                 Date.now() +
                   (issue === "window_expired" ? -25 * 3600000 : 3600000),
-              ),
+            ),
         ],
+      );
+    if (issue === "cart_changed")
+      await base.addToCart(f.ctx, randomUUID(), {
+        product_id: f.product,
+        option_ids: [],
+        quantity: 1,
+        notes: null,
+      });
+    if (issue === "cart_expired")
+      await admin.query(
+        "UPDATE app.carts SET status='expired' WHERE business_id=$1 AND conversation_id=$2",
+        [f.tenant, f.ctx.conversation],
       );
     let calls = 0;
     await new MetaDispatcher(
@@ -1716,6 +1730,16 @@ for (const issue of [
           )
         ).rows[0].last_error_code,
         "META_WINDOW_CLOSED",
+      );
+    if (issue.startsWith("cart_"))
+      assert.equal(
+        (
+          await admin.query(
+            "SELECT last_error_code FROM app.outbox_events WHERE id=$1",
+            [f.outbox.id],
+          )
+        ).rows[0].last_error_code,
+        "META_QUOTE_STALE",
       );
   });
 test("unknown, malformed and foreign-channel status cannot corrupt known messages", async () => {

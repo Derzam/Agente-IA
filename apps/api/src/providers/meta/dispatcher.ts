@@ -135,16 +135,25 @@ export class MetaDispatcher {
             "confirmation_challenges",
             m.confirmation_challenge_id,
           ),
-          order = await r.one("orders", challenge.order_id);
+          order = await r.one("orders", challenge.order_id),
+          cart = await r.one("carts", order.source_cart_id, true);
+        const now = new Date();
         if (
           challenge.customer_id !== c.customer_id ||
           challenge.conversation_id !== c.id ||
           challenge.consumed_at ||
-          challenge.expires_at <= new Date() ||
+          challenge.expires_at <= now ||
           order.status !== "awaiting_confirmation" ||
           order.version !== challenge.order_version
         )
           error = "META_CHALLENGE_EXPIRED";
+        else if (
+          order.quote_expires_at <= now ||
+          cart.status !== "active" ||
+          cart.expires_at <= now ||
+          order.source_cart_version !== cart.version
+        )
+          error = "META_QUOTE_STALE";
         else
           try {
             button = this.cipher.open(
