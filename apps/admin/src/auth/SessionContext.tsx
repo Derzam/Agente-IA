@@ -23,6 +23,7 @@ export interface SessionContextType {
   isSessionExpired: boolean;
   isMockMode: boolean;
   signIn: (credentials: { email: string; password: string }) => Promise<void>;
+  sendMagicLink: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<string | null>;
   clearExpiredNotice: () => void;
@@ -45,7 +46,6 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const supabase = useMemo(() => getSupabaseClient(), []);
 
-  // Hook for 401 callback in ApiClient
   const handleAuthExpired = useCallback(() => {
     setIsSessionExpired(true);
     setUser(null);
@@ -78,7 +78,6 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [supabase, handleAuthExpired]);
 
-  // Connect API client callbacks
   useEffect(() => {
     defaultApiClient.setConfig({
       getAccessToken: () => accessToken,
@@ -87,7 +86,6 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
   }, [accessToken, refreshSession, handleAuthExpired]);
 
-  // Initial session restoration from Supabase
   useEffect(() => {
     if (USE_MOCK_DATA) {
       setIsLoading(false);
@@ -95,7 +93,6 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     if (!supabase) {
-      // Real mode requested but Supabase not configured
       setIsLoading(false);
       return;
     }
@@ -121,7 +118,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setAccessToken(null);
           }
         }
-      } catch (err) {
+      } catch {
         if (isMounted) {
           setUser(null);
           setSession(null);
@@ -136,7 +133,6 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     initSession();
 
-    // Listen to Supabase auth state events
     const { data: authListener } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (!isMounted) return;
 
@@ -188,6 +184,42 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [supabase]
   );
 
+  const sendMagicLink = useCallback(
+    async (email: string) => {
+      if (USE_MOCK_DATA) {
+        setUser(MOCK_USER);
+        setAccessToken('mock-access-token-001');
+        setIsSessionExpired(false);
+        return;
+      }
+
+      if (!supabase) {
+        throw new Error('Supabase no está configurado. Revisa VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY.');
+      }
+
+      const normalizedEmail = email.trim().toLowerCase();
+      if (!normalizedEmail) {
+        throw new Error('Ingresa un correo electrónico válido.');
+      }
+
+      const emailRedirectTo =
+        typeof window !== 'undefined' ? window.location.origin : undefined;
+
+      const { error } = await supabase.auth.signInWithOtp({
+        email: normalizedEmail,
+        options: {
+          shouldCreateUser: false,
+          ...(emailRedirectTo ? { emailRedirectTo } : {}),
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+    },
+    [supabase]
+  );
+
   const signOut = useCallback(async () => {
     if (USE_MOCK_DATA) {
       setUser(null);
@@ -217,6 +249,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     isSessionExpired,
     isMockMode: USE_MOCK_DATA,
     signIn,
+    sendMagicLink,
     signOut,
     refreshSession,
     clearExpiredNotice,
