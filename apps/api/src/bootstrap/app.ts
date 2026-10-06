@@ -114,7 +114,7 @@ export async function buildApp(deps: AppDependencies) {
     origin: deps.config.adminAllowedOrigins,
     credentials: false,
     methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Authorization", "Content-Type", "Idempotency-Key"],
+    allowedHeaders: ["Authorization", "Content-Type", "Idempotency-Key", "X-Request-Id"],
     exposedHeaders: ["X-Request-Id", "Retry-After", "Idempotency-Replayed"],
   });
   await app.register(rateLimit, {
