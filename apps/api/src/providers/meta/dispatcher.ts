@@ -275,6 +275,15 @@ export class MetaDispatcher {
   }
 }
 const ranks: Record<string, number> = { sent: 1, delivered: 2, read: 3 };
+// Meta status timestamps have second-level precision. Resolve callbacks with
+// the same timestamp by a stable lifecycle precedence, regardless of arrival
+// order, including the otherwise incomparable `failed` state.
+const callbackPrecedence: Record<string, number> = {
+  sent: 1,
+  failed: 2,
+  delivered: 3,
+  read: 4,
+};
 export async function reconcileStatus(
   r: Repository,
   event: Row,
@@ -312,9 +321,15 @@ export async function reconcileStatus(
     )
   ).rows[0];
   if (!o.transport_started_at && !o.provider_message_id) return true;
+  const incomingAt = new Date(p.provider_timestamp).getTime();
+  const recordedAt = o.provider_status_at?.getTime();
+  if (recordedAt !== undefined && incomingAt < recordedAt)
+    return true;
   if (
-    o.provider_status_at &&
-    new Date(p.provider_timestamp) < o.provider_status_at
+    recordedAt !== undefined &&
+    incomingAt === recordedAt &&
+    (callbackPrecedence[status] ?? 0) <=
+      (callbackPrecedence[m.delivery_status] ?? 0)
   )
     return true;
   if (o.provider_message_id && o.provider_message_id !== p.provider_message_id)

@@ -837,6 +837,46 @@ test("expired encrypted quote is cancelled and replaced at a new cart version", 
     { code: "QUOTE_EXPIRED" },
   );
 });
+test("quote transport retries a definitive dead letter once under the current epoch", async () => {
+  const f = await quoteFixture();
+  await admin.query(
+    "UPDATE app.outbox_events SET status='dead_letter',last_error_code='META_EPOCH_CHANGED' WHERE id=$1",
+    [f.outbox.id],
+  );
+  await admin.query(
+    "UPDATE app.conversations SET automation_epoch=automation_epoch+1 WHERE id=$1",
+    [f.ctx.conversation],
+  );
+
+  const ctx = { ...f.ctx, automationEpoch: 2 };
+  const service = new OrderingService(
+    worker,
+    new EncryptedQuoteTransport(cipher),
+  );
+  await service.requestQuote(ctx);
+  let attempts = (
+    await admin.query(
+      "SELECT o.*,m.confirmation_challenge_id FROM app.outbox_events o JOIN app.messages m ON m.business_id=o.business_id AND m.outbox_id=o.id WHERE o.business_id=$1 AND o.event_type='whatsapp.message' ORDER BY o.created_at,o.id",
+      [f.tenant],
+    )
+  ).rows;
+  assert.equal(attempts.length, 2);
+  assert.equal(attempts[0].status, "dead_letter");
+  assert.equal(attempts[1].status, "pending");
+  assert.match(attempts[1].dedupe_key, new RegExp(`^${f.outbox.dedupe_key}:retry:`));
+  assert.equal(Number(attempts[1].automation_epoch), 2);
+  assert.equal(attempts[1].confirmation_challenge_id, f.challenge.id);
+
+  await service.requestQuote(ctx);
+  attempts = (
+    await admin.query(
+      "SELECT id,status FROM app.outbox_events WHERE business_id=$1 AND event_type='whatsapp.message'",
+      [f.tenant],
+    )
+  ).rows;
+  assert.equal(attempts.length, 2);
+  assert.equal(attempts.filter((row) => row.status === "pending").length, 1);
+});
 test("Meta acceptance persists provider id and monotonic duplicated/out-of-order statuses", async () => {
   const f = await quoteFixture();
   const safety = new RuntimeSafety(worker, f.config.budget);
@@ -950,6 +990,22 @@ test("failed acceptance evidence rolls back delivery and recovers unknown withou
   assert.equal((await admin.query("SELECT delivery_status FROM app.messages WHERE outbox_id=$1", [f.outbox.id])).rows[0].delivery_status, "unknown");
   assert.equal((await admin.query("SELECT count(*)::int n FROM app.outbox_events WHERE business_id=$1 AND event_type='message.delivery_updated'", [f.tenant])).rows[0].n, 1);
 });
+for (const arrival of [["failed", "sent"], ["sent", "failed"]] as const)
+  test(`same-second Meta failed/sent callbacks converge to failed in order ${arrival.join(" then ")}`, async () => {
+    const f = await quoteFixture(), id = "wamid.tied." + randomUUID();
+    await new MetaDispatcher(worker, { send: async () => ({ kind: "accepted", id }) }, cipher, f.config, new RuntimeSafety(worker, f.config.budget)).tick(f.tenant);
+    const at = Math.floor(Date.now() / 1000) * 1000;
+    for (const status of arrival)
+      await scoped(worker, f.tenant, r => reconcileStatus(r, {
+        id: randomUUID(), channel_id: f.channel, payload: {
+          provider_message_id: id, provider_timestamp: new Date(at).toISOString(), content: { status, callback: f.outbox.id },
+        },
+      }));
+    assert.equal((await admin.query("SELECT delivery_status FROM app.messages WHERE outbox_id=$1", [f.outbox.id])).rows[0].delivery_status, "failed");
+    assert.equal((await admin.query("SELECT delivery_status FROM app.outbox_events WHERE id=$1", [f.outbox.id])).rows[0].delivery_status, "failed");
+    assert.equal((await admin.query("SELECT count(*)::int n FROM app.outbox_events WHERE business_id=$1 AND event_type='message.delivery_updated'", [f.tenant])).rows[0].n, 2);
+    assert.equal((await admin.query("SELECT count(*)::int n FROM app.audit_logs WHERE business_id=$1 AND action='message.delivery_status'", [f.tenant])).rows[0].n, 2);
+  });
 for (const stale of ["sent", "delivered", "read"] as const)
   test(`stale Meta ${stale} cannot overwrite a newer failed callback`, async () => {
     const f = await quoteFixture(), id = "wamid.stale." + randomUUID();

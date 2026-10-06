@@ -47,13 +47,19 @@ async function enqueue(
     Number(c.automation_epoch) !== ctx.automationEpoch
   )
     throw new ProviderFailure("AI_EPOCH_CHANGED");
-  const found = (
+  const previous = (
     await r.db.query(
-      "SELECT id FROM app.outbox_events WHERE business_id=$1 AND dedupe_key=$2",
-      [r.tenant, key],
+      "SELECT dedupe_key,status FROM app.outbox_events WHERE business_id=$1 AND (dedupe_key=$2 OR dedupe_key LIKE $3) ORDER BY created_at DESC FOR UPDATE",
+      [r.tenant, key, `${key}:retry:%`],
     )
-  ).rows[0];
-  if (found) return;
+  ).rows;
+  // Pending, sending, unknown and sent rows already represent a viable or
+  // ambiguous transport attempt. Only a definitive terminal failure permits
+  // a new message, and that attempt gets its own durable dedupe key.
+  if (previous.some((row) => row.status !== "dead_letter")) return;
+  const outboxKey = previous.length
+    ? `${key}:retry:${randomUUID()}`
+    : key;
   const id = randomUUID(),
     box = randomUUID();
   await r.db.query(
@@ -64,7 +70,7 @@ async function enqueue(
       c.id,
       id,
       id,
-      key,
+      outboxKey,
       { resource_id: id, resource_version: 1, text },
       c.automation_epoch,
     ],
