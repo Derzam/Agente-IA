@@ -20,6 +20,12 @@ export function workerDatabaseUrl(env: NodeJS.ProcessEnv): string {
     );
   return value;
 }
+export function workerHealthPort(env: NodeJS.ProcessEnv): number {
+  const port = Number(env.WORKER_HEALTH_PORT || env.PORT || 3001);
+  if (!Number.isInteger(port) || port < 1 || port > 65535)
+    throw Error("WORKER_HEALTH_PORT inválido");
+  return port;
+}
 async function main() {
   const pool = createPool(workerDatabaseUrl(process.env));
   const config = loadRuntime(process.env);
@@ -32,9 +38,7 @@ async function main() {
   });
   try {
     await checkDatabaseRole(pool, "worker");
-    const port = Number(process.env.WORKER_HEALTH_PORT || 3001);
-    if (!Number.isInteger(port) || port < 1 || port > 65535)
-      throw Error("WORKER_HEALTH_PORT inválido");
+    const port = workerHealthPort(process.env);
     const health = createServer(async (req, res) => {
       res.setHeader("Content-Type", "application/json");
       if (req.url === "/health") {
