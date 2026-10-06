@@ -22,6 +22,13 @@ export function loadApiRuntime(env: NodeJS.ProcessEnv): ApiRuntimeConfig {
   if (invalid.length) throw new ConfigurationError(invalid);
   return { cursorKey, cursorPreviousKey };
 }
+export function workerHealthPort(env: NodeJS.ProcessEnv): number {
+  const port = Number(env.WORKER_HEALTH_PORT || env.PORT || 3001);
+  if (!Number.isInteger(port) || port < 1 || port > 65535)
+    throw Error("WORKER_HEALTH_PORT inválido");
+  return port;
+}
+
 export interface RuntimeConfig {
   aiEnabled: boolean;
   metaEnabled: boolean;
