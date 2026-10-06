@@ -21,6 +21,17 @@ export class InternalWorker {
     readonly maxAttempts = 5,
     readonly leaseSeconds = 30,
     readonly observe: (event: Row) => void = () => {},
+    readonly extensions?: {
+      status?: (r: Repository, event: Row) => Promise<boolean>;
+      inbound?: (r: Repository, customer: string) => Promise<void>;
+      received?: (r: Repository, message: Row, conversation: Row, event: Row) => Promise<void>;
+      confirmed?: (
+        r: Repository,
+        ctx: import("../modules/domain/application/ordering.js").CustomerContext,
+        order: Row,
+        inbound: string,
+      ) => Promise<void>;
+    },
   ) {}
   private async scoped<T>(
     tenant: string,
@@ -97,6 +108,17 @@ export class InternalWorker {
     return this.scoped(lease.tenant, async (r) => {
       const table =
         lease.queue === "inbox" ? "webhook_events" : "outbox_events";
+      if (lease.queue === "inbox" && code === "RATE_LIMITED") {
+        const result = await r.db.query(
+          "UPDATE app.webhook_events SET status='pending',attempts=greatest(0,attempts-1),lease_until=NULL,next_attempt_at=date_trunc('minute',clock_timestamp())+interval '1 minute',last_error_code='INBOUND_RATE_LIMITED' WHERE business_id=$1 AND id=$2 AND fencing_token=$3 AND status='processing' AND lease_until>clock_timestamp() RETURNING attempts",
+          [lease.tenant, lease.id, lease.token],
+        );
+        if (result.rowCount === 1) this.observe({
+          event_type: "worker.deferred", business_id: lease.tenant, job_id: lease.id,
+          error_code: "INBOUND_RATE_LIMITED", attempts: result.rows[0].attempts,
+        });
+        return result.rowCount === 1;
+      }
       const result = await r.db.query(
         `UPDATE app.${table} SET status=CASE WHEN attempts>=$4 THEN 'dead_letter' ELSE 'pending' END,lease_until=NULL,next_attempt_at=clock_timestamp()+make_interval(secs=>least(3600,power(2,least(attempts,10))::integer)) ${lease.queue === "inbox" ? ",last_error_code=$5" : ""} WHERE business_id=$1 AND id=$2 AND fencing_token=$3 AND status=$${lease.queue === "inbox" ? 6 : 5} AND lease_until>clock_timestamp() RETURNING status,attempts`,
         lease.queue === "inbox"
@@ -172,6 +194,7 @@ export class InternalWorker {
       await audit(r, system, event.id, "customer.create", "customer", customer);
     }
     const settings = await r.one("business_settings", r.tenant);
+    if (this.extensions?.inbound) await this.extensions.inbound(r, customer.id);
     let c = (
       await r.db.query(
         "SELECT * FROM app.conversations WHERE business_id=$1 AND customer_id=$2 AND channel_id=$3 AND status<>'closed' FOR UPDATE",
@@ -268,6 +291,7 @@ export class InternalWorker {
       );
     }
     await outbox(r, "message.received", m, event.id, c.id);
+    await this.extensions?.received?.(r, m, c, event);
     if (
       p.kind === "interactive" &&
       typeof content.id === "string" &&
@@ -276,9 +300,15 @@ export class InternalWorker {
       // A rejected button is a processed inbound message; isolate any partial command effects.
       await r.db.query("SAVEPOINT confirmation");
       try {
-        await new OrderingService(this.pool).confirmWithin(
+        const confirmed = await new OrderingService(this.pool).confirmWithin(
           r,
           { tenant: r.tenant, customer: customer.id, conversation: c.id },
+          m.id,
+        );
+        await this.extensions?.confirmed?.(
+          r,
+          { tenant: r.tenant, customer: customer.id, conversation: c.id },
+          confirmed,
           m.id,
         );
         await r.db.query("RELEASE SAVEPOINT confirmation");
@@ -297,6 +327,8 @@ export class InternalWorker {
     }
   }
   private async status(r: Repository, event: Row) {
+    if (this.extensions?.status && (await this.extensions.status(r, event)))
+      return;
     const p = event.payload;
     const status = p.content?.status;
     const rank: Record<string, number> = {

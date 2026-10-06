@@ -1,6 +1,8 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { createPool, checkDatabaseRole } from "../platform/database.js";
-import { InternalWorker } from "../worker/internal-worker.js";
+import { RuntimeWorker } from "../worker/runtime-worker.js";
+import { loadRuntime } from "../config/runtime.js";
+import { createServer } from "node:http";
 export function workerDatabaseUrl(env: NodeJS.ProcessEnv): string {
   const value = env.WORKER_DATABASE_URL;
   if (!value) throw Error("WORKER_DATABASE_URL requerida.");
@@ -20,6 +22,7 @@ export function workerDatabaseUrl(env: NodeJS.ProcessEnv): string {
 }
 async function main() {
   const pool = createPool(workerDatabaseUrl(process.env));
+  const config = loadRuntime(process.env);
   let stop = false;
   process.once("SIGINT", () => {
     stop = true;
@@ -29,15 +32,47 @@ async function main() {
   });
   try {
     await checkDatabaseRole(pool, "worker");
-    const worker = new InternalWorker(pool, 5, 30, (event) =>
+    const port = Number(process.env.WORKER_HEALTH_PORT || 3001);
+    if (!Number.isInteger(port) || port < 1 || port > 65535)
+      throw Error("WORKER_HEALTH_PORT inválido");
+    const health = createServer(async (req, res) => {
+      res.setHeader("Content-Type", "application/json");
+      if (req.url === "/health") {
+        res.end('{"status":"ok"}');
+        return;
+      }
+      if (req.url !== "/ready") {
+        res.statusCode = 404;
+        res.end("{}");
+        return;
+      }
+      try {
+        if (stop) throw Error();
+        await checkDatabaseRole(pool, "worker");
+        res.end('{"status":"ready"}');
+      } catch {
+        res.statusCode = 503;
+        res.end('{"status":"unavailable"}');
+      }
+    });
+    await new Promise<void>((resolve, reject) => {
+      health.once("error", reject);
+      health.listen(port, "0.0.0.0", resolve);
+    });
+    const worker = new RuntimeWorker(pool, config, (event) =>
       process.stdout.write(JSON.stringify(event) + "\n"),
     );
-    while (!stop) {
-      const result = await worker.tick();
-      process.stdout.write(
-        JSON.stringify({ event_type: "worker.tick", ...result }) + "\n",
-      );
-      await delay(1000);
+    try {
+      while (!stop) {
+        const result = await worker.tick();
+        process.stdout.write(
+          JSON.stringify({ event_type: "worker.tick", ...result }) + "\n",
+        );
+        await delay(1000);
+      }
+    } finally {
+      await worker.drain();
+      await new Promise<void>((resolve) => health.close(() => resolve()));
     }
   } finally {
     await pool.end();

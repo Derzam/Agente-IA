@@ -80,3 +80,9 @@ Estos comandos revisan especificaciones y consistencia documental; no son prueba
 ### Fase 4 en PR Draft #12
 
 [API operativa, servicios y worker interno](docs/phase-04/implementation.md), [contrato de modificadores para Antigravity](docs/phase-04/modifier-contract.md) y [evidencia staging](docs/phase-04/staging-validation.md). No hay deploy público ni activación OpenAI/Meta outbound.
+
+### Fase 5 en PR #16
+
+[Integración con main después de PR #17](docs/phase-05/main-reconciliation.md): conserva runtime backend y mejoras de reconciliación/polling/scroll del panel. El estado actual de revisión y CI se consulta en PR #16.
+
+[Runtime Responses API y Meta](docs/phase-05/implementation.md), [validación](docs/phase-05/staging-validation.md) y [seguridad/blockers de activación](docs/phase-05/activation-and-security.md). Las Fases 1–4 están integradas en main. Fase 5 conserva los contratos del panel, añade tools deterministas y transporte de confirmación cifrado; se prueba localmente con proveedores simulados. Hosting, secret manager, principales LOGIN y pruebas externas OpenAI/Meta están pendientes de autorización/configuración. No hay URL pública ni deploy.

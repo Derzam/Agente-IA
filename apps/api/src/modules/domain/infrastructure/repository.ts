@@ -19,7 +19,10 @@ export type Table =
   | "human_handoffs"
   | "carts"
   | "cart_items"
-  | "confirmation_challenges";
+  | "confirmation_challenges"
+  | "conversation_turns"
+  | "tool_executions";
+// Internal runtime metadata remains outside public DTO projection.
 export class Repository {
   constructor(
     readonly db: PoolClient,

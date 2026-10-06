@@ -40,8 +40,9 @@ export function registerDomainRoutes(
   app: FastifyInstance,
   auth: AuthVerifier,
   pool: pg.Pool,
+  runtimeRateLimit = false,
 ) {
-  const tx = new DomainTransactions(pool),
+  const tx = new DomainTransactions(pool, runtimeRateLimit),
     catalog = new CatalogService(),
     operations = new OperationsService();
   for (const [path, item] of Object.entries(contract.paths)) {
