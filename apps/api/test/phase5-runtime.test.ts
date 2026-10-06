@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { randomUUID, randomBytes, createHash, createHmac } from "node:crypto";
 import pg from "pg";
-import { loadRuntime, type RuntimeConfig } from "../src/config/runtime.js";
+import { loadRuntime, workerHealthPort, type RuntimeConfig } from "../src/config/runtime.js";
 import { RuntimeSafety, scoped, rate } from "../src/platform/runtime-safety.js";
 import { checkDatabaseRole } from "../src/platform/database.js";
 import {
@@ -260,6 +260,13 @@ function harness(
     f.config,
   );
 }
+test("worker health port prefers WORKER_HEALTH_PORT, then PORT, then 3001", () => {
+  assert.equal(workerHealthPort({ WORKER_HEALTH_PORT: "4321", PORT: "9876" }), 4321);
+  assert.equal(workerHealthPort({ PORT: "9876" }), 9876);
+  assert.equal(workerHealthPort({}), 3001);
+  assert.throws(() => workerHealthPort({ PORT: "0" }), /WORKER_HEALTH_PORT inválido/);
+});
+
 test("restricted API, ingress and worker readiness succeeds; mismatch fails", async () => {
   await Promise.all([
     checkDatabaseRole(api, "api"),

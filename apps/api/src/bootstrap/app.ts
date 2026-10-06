@@ -17,6 +17,7 @@ import {
 } from "../platform/errors.js";
 import type pg from "pg";
 import { registerDomainRoutes } from "../modules/domain/http/routes.js";
+import { registerPrivacyRoute } from "../modules/privacy/page.js";
 
 export interface AppDependencies {
   config: Config;
@@ -133,6 +134,7 @@ export async function buildApp(deps: AppDependencies) {
     return { status: "ready" };
   });
 
+  registerPrivacyRoute(app);
   registerIdentityRoutes(app, deps.auth, deps.identities, !deps.domainPool);
   if (deps.domainPool)
     registerDomainRoutes(

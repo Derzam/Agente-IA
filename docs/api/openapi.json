@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Agente-IA — contrato canónico",
-    "version": "0.4.0",
-    "description": "Fase 4: API operativa interna IMPLEMENTED; sin despliegue público ni OpenAI ni Meta outbound."
+    "version": "0.4.1",
+    "description": "Fase 4: API operativa IMPLEMENTED. Staging Fase 5b incluye política de privacidad pública; OpenAI y Meta outbound permanecen desactivados."
   },
   "paths": {
     "/v1/me": {
@@ -4640,6 +4640,33 @@
           },
           "503": {
             "$ref": "#/components/responses/Error503"
+          }
+        }
+      }
+    },
+    "/privacy": {
+      "get": {
+        "operationId": "privacy",
+        "summary": "Política de privacidad pública de Agente-IA staging",
+        "x-implementation-status": "IMPLEMENTED",
+        "security": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Aviso público en español, sin autenticación ni acceso a datos de negocio.",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
           }
         }
       }

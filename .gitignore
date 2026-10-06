@@ -10,6 +10,7 @@ supabase/.temp/
 .env
 .env.*
 !.env.example
+.staging-secrets/
 
 # Logs and OS files
 *.log

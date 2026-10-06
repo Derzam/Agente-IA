@@ -1,6 +1,6 @@
-# Contratos API v0.4.0 — Fase 4 operativa
+# Contratos API v0.4.1 — Fase 4 y staging Fase 5b
 
-Especificación máquina: [openapi.json](openapi.json), OpenAPI 3.1; tipos shared. Las 49 operaciones están IMPLEMENTED en la rama de Fase 4; sin despliegue público. [Implementación y límites](../phase-04/implementation.md). Las etapas anteriores conservan su documentación histórica.
+Especificación máquina: [openapi.json](openapi.json), OpenAPI 3.1; tipos shared. Fase 4 implementó 49 operaciones; staging Fase 5b añade la política pública de privacidad (50 en total). [Implementación y límites de Fase 4](../phase-04/implementation.md). Las etapas anteriores conservan su documentación histórica.
 
 Fase 4 expone ModifierGroup/ModifierOption, rutas anidadas y versiones independientes; Product.modifier_groups permite grupos vacíos. ProductOption conserva un puente derivado de datos reales, deprecated y limitado a escrituras que no alteren reglas compartidas sin CAS del grupo. [Contrato para Antigravity](../phase-04/modifier-contract.md).
 
@@ -99,3 +99,6 @@ El panel recupera versión actual y pide una nueva decisión, no reintenta autom
 ErrorCode está en shared/OpenAPI: VALIDATION_ERROR(422), UNAUTHENTICATED(401), FORBIDDEN(403), NOT_FOUND(404), VERSION_CONFLICT/IDEMPOTENCY_CONFLICT/REQUEST_IN_PROGRESS/INVALID_ORDER_TRANSITION/QUOTE_CHANGED/QUOTE_EXPIRED/PRODUCT_UNAVAILABLE/DELIVERY_UNAVAILABLE/BUSINESS_CLOSED/HANDOFF_REQUIRED/WINDOW_CLOSED(409), RATE_LIMITED(429), PROVIDER_UNAVAILABLE(503), INTERNAL_ERROR(500). 400 usa VALIDATION_ERROR para sintaxis. `details` solo field/issue sin valor sensible; retryable solo para operación segura recuperable.
 
 DomainEvent: event_id, business_id, type, resource_id, resource_version, occurred_at, request_id. Types: order.created, order.status_changed, conversation.updated, message.received, message.delivery_updated, handoff.created, handoff.resolved. Entrega al menos una vez, dedupe event_id y solo aplicar version mayor; detectar saltos y refrescar recurso. Estos son eventos internos propuestos, no stream disponible. MVP panel hace polling cada 5–10s mientras visible, backoff ante 429, refresh al recuperar foco; futuro transporte se acordará sin duplicar modelos.
+## Política de privacidad pública (staging Fase 5b)
+
+`GET /privacy` devuelve `200 text/html; charset=utf-8` sin autenticación ni consultas a la DB por request. Depende de que el API esté iniciado: el bootstrap mantiene los checks DB/roles previos a escuchar HTTP y falla cerrado si no pasan. No se garantiza disponibilidad durante fallos de arranque. Es un aviso estático exclusivo de Agente-IA; incluye responsable, contacto y procedimiento manual de solicitud de eliminación. No acepta formularios ni refleja parámetros. Conserva headers de seguridad y rate limiting del API; `Cache-Control: no-cache` permite revalidar revisiones. No modifica contratos del panel ni expone datos de negocio. [Publicación y límites](../phase-05b/privacy-policy.md).

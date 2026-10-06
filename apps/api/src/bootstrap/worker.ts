@@ -1,7 +1,7 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { createPool, checkDatabaseRole } from "../platform/database.js";
 import { RuntimeWorker } from "../worker/runtime-worker.js";
-import { loadRuntime } from "../config/runtime.js";
+import { loadRuntime, workerHealthPort } from "../config/runtime.js";
 import { createServer } from "node:http";
 export function workerDatabaseUrl(env: NodeJS.ProcessEnv): string {
   const value = env.WORKER_DATABASE_URL;
@@ -32,9 +32,7 @@ async function main() {
   });
   try {
     await checkDatabaseRole(pool, "worker");
-    const port = Number(process.env.WORKER_HEALTH_PORT || 3001);
-    if (!Number.isInteger(port) || port < 1 || port > 65535)
-      throw Error("WORKER_HEALTH_PORT inválido");
+    const port = workerHealthPort(process.env);
     const health = createServer(async (req, res) => {
       res.setHeader("Content-Type", "application/json");
       if (req.url === "/health") {
