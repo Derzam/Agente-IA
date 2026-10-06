@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { testApp } from "./helpers.js";
 import { contract } from "./schema.js";
 
-test("privacy is public HTML even when DB and authenticated services are unavailable", async t => {
+test("privacy in a running API uses no authentication or DB services when readiness fails", async t => {
   const unexpected = async (): Promise<never> => { throw new Error("must not access private service"); };
   const app = await testApp({
     readiness: unexpected,
@@ -13,6 +13,7 @@ test("privacy is public HTML even when DB and authenticated services are unavail
   });
   t.after(() => app.close());
   const response = await app.inject("/privacy");
+  assert.equal((await app.inject("/ready")).statusCode, 503);
   assert.equal(response.statusCode, 200);
   assert.match(response.headers["content-type"]!, /^text\/html; charset=utf-8$/);
   assert.match(response.body, /<html lang="es">/);
