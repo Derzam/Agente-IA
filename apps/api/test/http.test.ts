@@ -72,8 +72,20 @@ test('me uses verified identity and ignores fabricated membership headers/query'
   assert.equal((await app.inject('/v1/me')).statusCode,401);
   assert.equal((await app.inject({url:'/v1/me',headers:{authorization:'Bearer invalid'}})).statusCode,401);
 });
-test('CORS exact allowlist, secure headers and basic rate limiting',async t=>{
+test('CORS exact allowlist, admin request-id preflight, secure headers and basic rate limiting',async t=>{
   const app=await testApp({rateLimitMax:2});t.after(()=>app.close());
+  const preflight=await app.inject({
+    method:'OPTIONS',
+    url:'/v1/me',
+    headers:{
+      origin:'http://localhost:5173',
+      'access-control-request-method':'GET',
+      'access-control-request-headers':'authorization,x-request-id'
+    }
+  });
+  assert.equal(preflight.statusCode,204);
+  assert.equal(preflight.headers['access-control-allow-origin'],'http://localhost:5173');
+  assert.match(String(preflight.headers['access-control-allow-headers']),/X-Request-Id/i);
   const good=await app.inject({url:'/v1/me',headers:{origin:'http://localhost:5173'}});
   assert.equal(good.headers['access-control-allow-origin'],'http://localhost:5173');assert.equal(good.headers['x-content-type-options'],'nosniff');
   const bad=await app.inject({url:'/v1/me',headers:{origin:'https://evil.example'}});assert.equal(bad.headers['access-control-allow-origin'],undefined);
